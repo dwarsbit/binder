@@ -1136,10 +1136,12 @@ export default function App({
       onAddToNotes={(highlight) => {
         const editor = notesEditor.current;
         if (!editor) return;
+        // Empty notes get the quote in place of their empty line.
+        const end = editor.state.doc.content.size;
         editor
           .chain()
           .insertContentAt(
-            editor.state.doc.content.size,
+            editor.isEmpty ? { from: 0, to: end } : end,
             quoteOf(readingItem, highlight).html,
           )
           .focus("end")
