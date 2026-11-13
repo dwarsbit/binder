@@ -8,8 +8,10 @@
 - It proposes highlights, shown dashed in the reader next to your own. Keep the ones you want.
 - What the assistant wrote is marked as its own and kept apart from your notes, in a file next to the item. **Take over** moves a part to your notes. See [the binder format](docs/format.md).
 - Keep the assistant away from one item, or out of a whole binder.
+- Fixed: adding a highlight to empty notes left an empty line above the quote.
+- Fixed: a link to a page of a file with parentheses in its name broke in notes.
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-11-13)
 
 - Read a PDF or a web page in Binder: choose **Read** on its item. Zoom in and out, and find text in the source with Cmd/Ctrl + F.
 - Highlight text in a source as a claim, definition, method, finding or quote. The highlights are listed next to the source, and a click goes back to each one.
