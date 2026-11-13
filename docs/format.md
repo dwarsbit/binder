@@ -17,8 +17,10 @@ Thesis/
 └── items/
     ├── Screen or paper.md
     ├── Screen or paper.pdf
+    ├── Screen or paper.highlights.md
     ├── The reading student.md
     ├── Where students read.md
+    ├── Where students read.html
     └── Does an e-reader count as a screen.md
 ```
 
@@ -26,12 +28,13 @@ Thesis/
 - `binder.md` says that the folder is a binder, and holds its research
   question.
 - `items/` holds the items: one Markdown file each, with the original
-  file next to it under the same name.
+  file next to it under the same name, and the highlights in it, if
+  any, in a file of their own.
 - Binder reads every Markdown file in the folder and the folders in it,
   so an item can live in any folder. It writes new items to `items/`.
-- A folder whose name starts with a dot, such as `.git` or `.binder`, is
-  left alone. Binder 0.3 will keep what it can rebuild, such as an index
-  of passages, in `.binder/`.
+- A folder whose name starts with a dot, such as `.git`, is left alone.
+  Binder keeps what it can rebuild in `.binder/`: see
+  [What Binder can rebuild](#what-binder-can-rebuild).
 
 ## `binder.md`
 
@@ -106,7 +109,8 @@ blocks. A note or a thought has no source: its body is the note.
 An item's file is named after its title, without the characters a file
 system refuses, and cut at 80 characters. A second item with the same
 title gets a number: `Screen or paper 2.md`. When the title changes,
-the file and its original file get the new name.
+the file, its original file and its highlights get the new name, and
+links to them in notes follow.
 
 ### Kinds
 
@@ -132,12 +136,111 @@ the file and its original file get the new name.
 | `processed` | Processed | Read, and what it means for the project is written down           |
 | `set-aside` | Set aside | Not for this project, or not now                                  |
 
+## A kept web page
+
+A web page's text can be kept with its item, so it can be read and
+highlighted without the site. Binder saves the page's article, without
+the site's menus, ads, scripts, styles and images, as an HTML file next to
+the item, and points `file` at it:
+
+```markdown
+---
+title: Where students read
+kind: webpage
+status: to-read
+url: https://example.org/where-students-read
+file: Where students read.html
+---
+```
+
+```html
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Where students read</title>
+    <link rel="canonical" href="https://example.org/where-students-read" />
+    <meta name="binder-kept" content="2026-11-13" />
+  </head>
+  <body>
+    <article>
+      <h1>Where students read</h1>
+      <p>…</p>
+    </article>
+  </body>
+</html>
+```
+
+- The page keeps headings, paragraphs, lists, quotes, tables, code,
+  emphasis and links. Links point to the web.
+- `binder-kept` is the date the page was kept.
+- When the link leads to a PDF, the PDF is saved instead, as the
+  item's file.
+
+## Highlights
+
+The highlights in a source are kept next to its item, in a Markdown file
+named after the item with `.highlights` before `.md`:
+
+```markdown
+---
+highlights-of: Screen or paper.md
+---
+
+- **Claim** · p. 4 · “Students who read on paper remembered more of the argument.” ^k3x9q2
+- **Method** · p. 2 · “We asked 1,204 first-year students at three universities.” ^b71zdm
+- **Quote** · “Reading is slower on screen, but not by much.” ^q0w8ea
+```
+
+| Property        | Value                                           |
+| --------------- | ----------------------------------------------- |
+| `highlights-of` | The item, as a path from the highlights' folder |
+
+Each highlight is one line of a list, in the order they were made:
+
+- its category in bold: **Claim**, **Definition**, **Method**,
+  **Finding** or **Quote**;
+- `p. N`, the page in a PDF, counted from 1 as the file counts them;
+  a web page has none;
+- the highlighted text between “ and ”, on one line;
+- `^` and its id: letters and digits, unique in the file.
+
+Binder finds a highlight again by its text, on its page. When the text is
+on the page more than once, the first one is highlighted. A line Binder
+can't read is kept as written.
+
+The highlights file is not an item: Binder doesn't show it in a list. It
+moves and goes away with its item.
+
+### A link to a page
+
+A highlight taken into notes is a quote with a link to its place in the
+source, as a Markdown link to the file with the page after `#page=`:
+
+```markdown
+> Students who read on paper remembered more of the argument.
+> [Okafor and Brandt 2021, p. 4](Screen%20or%20paper.pdf#page=4&highlight=k3x9q2)
+```
+
+- `page` is the page, as in the highlights file. A web page has none.
+- `highlight` is the highlight's id. Binder opens the source there, and
+  at the page when the highlight is gone.
+- Other apps open the file; most PDF readers go to the page.
+
+## What Binder can rebuild
+
+`.binder/` holds what Binder works out from the files in the binder, so
+it doesn't have to again. Deleting it loses nothing: Binder builds it
+again. Leave it out when you share or back up a binder.
+
+| File                | What it holds                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `.binder/text.json` | The text of each PDF and kept web page, by page, for search. Each file's text is kept with its checksum. |
+
 ## Coming later
 
 Later releases add to this format. Each addition is written down here
 before the code that reads it.
 
-- 0.2: highlights in a source, with their page and category, and the
-  text of a web page kept with its item.
 - 0.3: what the assistant proposes and writes, marked as the assistant's.
 - 0.5: topics, as a property of items, highlights and notes.

@@ -20,6 +20,13 @@
   --status-processed: oklch(59.6% 0.145 163.225);
   --status-set-aside: oklch(70.7% 0.022 323);
   --status-inbox: var(--tint);
+  /* The highlight categories: a color each, always with the word. */
+  --hl-claim: oklch(80% 0.15 80);
+  --hl-definition: oklch(72% 0.12 245);
+  --hl-method: oklch(68% 0.14 300);
+  --hl-finding: oklch(74% 0.15 155);
+  --hl-quote: oklch(70% 0.12 20);
+  --hl-find: oklch(85% 0.17 100);
 }
 .dark {
   --primary: oklch(77% 0.075 200);
@@ -458,5 +465,444 @@ select.prop-input {
   }
   .item-props {
     grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+
+/* ---------- Reader: the source, with its highlights and the notes next to it ---------- */
+.reader {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.reader-bar {
+  display: flex;
+  height: 44px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.reader-find {
+  display: flex;
+  width: min(300px, 34%);
+  min-width: 150px;
+  height: 28px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  padding: 0 4px 0 8px;
+}
+.reader-find:focus-within {
+  border-color: var(--ring);
+}
+.reader-find input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  color: var(--foreground);
+  outline: none;
+}
+.card-button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+}
+.card-button:hover:not(:disabled) {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.card-button:disabled {
+  opacity: 0.4;
+}
+.reader-body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
+}
+.reader-source {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  background: var(--muted);
+}
+.reader-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+.panel-heading {
+  display: flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.reader-highlights {
+  display: flex;
+  max-height: 45%;
+  flex: none;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border);
+  padding-top: 6px;
+}
+.reader-notes {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding-top: 6px;
+}
+.reader-notes-page {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 24px;
+}
+.reader-notes-page .doc {
+  font-size: 14px;
+}
+.highlight-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+.highlight-card {
+  margin-top: 4px;
+  border-radius: 6px;
+  border-left: 3px solid var(--hl);
+  background: var(--background);
+  padding: 4px 6px 6px 6px;
+  cursor: grab;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.highlight-card:hover .drag-grip {
+  opacity: 1;
+}
+.drag-grip {
+  opacity: 0.4;
+}
+.highlight-text {
+  display: -webkit-box;
+  width: 100%;
+  overflow: hidden;
+  padding: 2px 4px 0 16px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.category-select {
+  appearance: none;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 2px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.category-select:hover {
+  background: var(--muted);
+}
+.category-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--hl);
+}
+.card-claim,
+.dot-claim {
+  --hl: var(--hl-claim);
+}
+.card-definition,
+.dot-definition {
+  --hl: var(--hl-definition);
+}
+.card-method,
+.dot-method {
+  --hl: var(--hl-method);
+}
+.card-finding,
+.dot-finding {
+  --hl: var(--hl-finding);
+}
+.card-quote,
+.dot-quote {
+  --hl: var(--hl-quote);
+}
+.highlight-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  transform: translate(-50%, calc(-100% - 8px));
+  gap: 2px;
+  border-radius: 8px;
+  background: var(--popover, var(--card));
+  padding: 3px;
+  box-shadow:
+    0 4px 16px oklch(0 0 0 / 12%),
+    0 0 0 1px var(--border);
+}
+.highlight-menu button {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 5px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.highlight-menu button:hover {
+  background: var(--muted);
+}
+
+/* A PDF: pages under each other, the text to select over the picture. */
+.pdf-pages {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 24px 48px;
+}
+.pdf-page {
+  position: relative;
+  flex: none;
+  /* Centered, and from the left edge once wider than the window. */
+  margin-inline: auto;
+  background: white;
+  box-shadow:
+    0 1px 3px oklch(0 0 0 / 10%),
+    0 0 0 1px oklch(0 0 0 / 6%);
+}
+.pdf-page > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hl-mark {
+  position: absolute;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--hl) 45%, transparent);
+  mix-blend-mode: multiply;
+}
+.hl-claim {
+  --hl: var(--hl-claim);
+}
+.hl-definition {
+  --hl: var(--hl-definition);
+}
+.hl-method {
+  --hl: var(--hl-method);
+}
+.hl-finding {
+  --hl: var(--hl-finding);
+}
+.hl-quote {
+  --hl: var(--hl-quote);
+}
+.hl-find {
+  --hl: var(--hl-find);
+  outline: 1px solid color-mix(in oklch, var(--hl-find) 80%, black);
+}
+.hl-find-current {
+  --hl: oklch(72% 0.19 55);
+  outline: 2px solid oklch(60% 0.19 50);
+}
+.hl-mark.flash {
+  animation: mark-flash 1.2s ease-out;
+}
+@keyframes mark-flash {
+  0%,
+  40% {
+    outline: 3px solid var(--ring);
+  }
+  100% {
+    outline: 0 solid transparent;
+  }
+}
+
+/* The text layer of pdf.js, as its viewer draws it (pdfjs-dist/web/pdf_viewer.css). */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.textLayer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+    scale(var(--min-font-size-inv));
+}
+.textLayer .markedContent {
+  display: contents;
+}
+.textLayer ::selection {
+  background: color-mix(in oklch, var(--ring) 30%, transparent);
+  color: transparent;
+}
+.textLayer br::selection {
+  background: transparent;
+}
+.textLayer .endOfContent {
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  display: block;
+  cursor: default;
+  user-select: none;
+}
+.textLayer.selecting .endOfContent {
+  top: 0;
+}
+
+/* A kept web page, as text to read. */
+.html-page {
+  position: relative;
+  width: calc(100% - 32px);
+  max-width: 44em;
+  margin: 16px auto 48px;
+  -webkit-user-select: text;
+  user-select: text;
+  border-radius: 8px;
+  background: var(--card);
+  padding: 2em 2.5em 3em;
+  box-shadow: 0 0 0 1px var(--border);
+  line-height: 1.6;
+}
+.html-page .hl-mark {
+  mix-blend-mode: normal;
+  background: color-mix(in oklch, var(--hl) 35%, transparent);
+}
+.html-article {
+  position: relative;
+  z-index: 1;
+}
+.html-source {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 1em;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.html-source a {
+  color: var(--tint-foreground);
+}
+.html-article :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.4em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.html-article h1 {
+  margin-top: 0;
+  font-size: 1.6em;
+}
+.html-article h2 {
+  font-size: 1.3em;
+}
+.html-article h3 {
+  font-size: 1.1em;
+}
+.html-article :is(p, ul, ol, blockquote, pre, table, figure, dl) {
+  margin: 0 0 0.9em;
+}
+.html-article :is(ul, ol) {
+  padding-left: 1.5em;
+}
+.html-article ul {
+  list-style: disc;
+}
+.html-article ol {
+  list-style: decimal;
+}
+.html-article blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1em;
+  color: var(--muted-foreground);
+}
+.html-article a {
+  color: var(--tint-foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.html-article pre {
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--muted);
+  padding: 0.75em 1em;
+  font-size: 0.85em;
+}
+.html-article :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 0.3em 0.6em;
+}
+.html-article figcaption {
+  font-size: 0.85em;
+  color: var(--muted-foreground);
+}
+.html-article ::selection {
+  background: color-mix(in oklch, var(--ring) 25%, transparent);
+}
+
+@media (max-width: 860px) {
+  .reader-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 40%);
+  }
+  .reader-panel {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+  .reader-find {
+    width: auto;
+    min-width: 0;
+    flex: 1;
   }
 }

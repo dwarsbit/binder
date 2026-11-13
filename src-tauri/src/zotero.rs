@@ -43,8 +43,9 @@ pub fn local_get(path: &str, query: &str) -> Result<String, String> {
     if !path_ok || !query_ok {
         return Err("invalid Zotero request".into());
     }
-    let mut stream = TcpStream::connect(HOST)
-        .map_err(|_| "Could not reach Zotero. Check that Zotero is open on this computer.".to_string())?;
+    let mut stream = TcpStream::connect(HOST).map_err(|_| {
+        "Could not reach Zotero. Check that Zotero is open on this computer.".to_string()
+    })?;
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .map_err(|_| NO_ANSWER.to_string())?;
@@ -55,10 +56,14 @@ pub fn local_get(path: &str, query: &str) -> Result<String, String> {
         .write_all(request.as_bytes())
         .map_err(|_| NO_ANSWER.to_string())?;
     let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).map_err(|_| NO_ANSWER.to_string())?;
+    stream
+        .read_to_end(&mut raw)
+        .map_err(|_| NO_ANSWER.to_string())?;
     let (status, body) = parse_response(&raw)?;
     if !(200..300).contains(&status) {
-        return Err(format!("Zotero answered {status}. Check that Zotero is up to date."));
+        return Err(format!(
+            "Zotero answered {status}. Check that Zotero is up to date."
+        ));
     }
     Ok(body)
 }
@@ -121,8 +126,12 @@ pub fn bibtex_read(path: String) -> Result<String, String> {
     if !path.is_absolute() || !is_bib(&path) {
         return Err("Only a .bib file can be read.".into());
     }
-    let meta = std::fs::metadata(&path)
-        .map_err(|_| format!("{} is gone. Pick the file again in Settings.", path.display()))?;
+    let meta = std::fs::metadata(&path).map_err(|_| {
+        format!(
+            "{} is gone. Pick the file again in Settings.",
+            path.display()
+        )
+    })?;
     if !meta.is_file() || meta.len() > BIB_LIMIT {
         return Err("This file is too large to read.".into());
     }
@@ -142,7 +151,10 @@ mod tests {
         std::fs::write(&bib, "@book{a, title = {A}}").unwrap();
         let other = dir.join("notes.txt");
         std::fs::write(&other, "secret").unwrap();
-        assert_eq!(bibtex_read(bib.display().to_string()).unwrap(), "@book{a, title = {A}}");
+        assert_eq!(
+            bibtex_read(bib.display().to_string()).unwrap(),
+            "@book{a, title = {A}}"
+        );
         assert!(bibtex_read(other.display().to_string()).is_err());
         assert!(bibtex_read("library.bib".into()).is_err());
         std::fs::remove_dir_all(&dir).unwrap();

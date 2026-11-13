@@ -1,4 +1,5 @@
 import {
+  BookOpenText,
   CaseSensitive,
   ChevronDown,
   ChevronRight,
@@ -18,9 +19,9 @@ import { searchProject, type SearchResult } from "@cursive/editor/lib/search";
 import { cn } from "@cursive/editor/lib/cn";
 
 /**
- * Search across the binder's items: titles, details and notes, case and
- * accents aside. Choosing a result opens the item with the find bar on what
- * was searched.
+ * Search across the binder's items: titles, details and notes, and the
+ * text of their files by page, case and accents aside. Choosing a result
+ * opens the item, or its file in the reader, on what was searched.
  */
 export function SearchDialog({
   pages,
@@ -108,7 +109,8 @@ export function SearchDialog({
         )}
         {!query.trim() && (
           <p className="px-3 py-3 text-[13px] text-muted-foreground">
-            Search the titles, details and notes of every item.
+            Search the titles, details and notes of every item, and the text of its PDF
+            or kept page.
           </p>
         )}
         {results.map((result, at) => {
@@ -126,10 +128,17 @@ export function SearchDialog({
               onClick={() => pick(result)}
             >
               <span className="flex w-full items-center gap-2 text-[13px] font-medium">
-                <FileText
-                  className="size-3.5 flex-none text-muted-foreground"
-                  aria-hidden
-                />
+                {result.path.includes("#page=") ? (
+                  <BookOpenText
+                    className="size-3.5 flex-none text-muted-foreground"
+                    aria-hidden
+                  />
+                ) : (
+                  <FileText
+                    className="size-3.5 flex-none text-muted-foreground"
+                    aria-hidden
+                  />
+                )}
                 <span className="min-w-0 flex-1 truncate">{result.title}</span>
                 {result.count > 1 && (
                   <span className="flex-none text-2xs font-normal text-muted-foreground tabular-nums">

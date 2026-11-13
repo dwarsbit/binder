@@ -1,5 +1,7 @@
 import type { Project } from "@cursive/editor/lib/paths";
 import { newItemSource, writeBinderInfo, type NewItem } from "./binder";
+import { writeHighlights } from "./highlights";
+import { SAMPLE_FILES } from "./sample-files";
 
 /**
  * The demo binder that `pnpm dev` opens in a browser: a student's thesis
@@ -17,6 +19,7 @@ const ITEMS: Array<NewItem & { path: string; added: string }> = [
     year: "2021",
     publishedIn: "Journal of Higher Education Research",
     doi: "10.1000/jher.2021.0042",
+    file: "Screen or paper how first-year students read course texts.pdf",
     tags: ["survey", "laptops", "printing"],
   },
   {
@@ -38,6 +41,7 @@ const ITEMS: Array<NewItem & { path: string; added: string }> = [
     status: "inbox",
     publishedIn: "University Library",
     url: "https://example.org/library/where-students-read",
+    file: "Where students read library survey 2025.html",
     tags: ["survey"],
   },
   {
@@ -142,6 +146,8 @@ const ITEMS: Array<NewItem & { path: string; added: string }> = [
     markdown: `- Does an e-reader count as a screen?
 - Can I use the library survey, or is it too small?
 - See [[The reading student]], chapter 3.
+
+> “We did not ask about e-readers, which few students in our sample owned.” [Okafor and Brandt 2021, p. 3](Screen%20or%20paper%20how%20first-year%20students%20read%20course%20texts.pdf#page=3)
 `,
   },
 ];
@@ -157,6 +163,26 @@ export const SAMPLE_BINDER: Project = {
     ...Object.fromEntries(
       ITEMS.map(({ path, added, ...item }) => [path, newItemSource(item, added)]),
     ),
+    "items/Screen or paper how first-year students read course texts.highlights.md":
+      writeHighlights(
+        "items/Screen or paper how first-year students read course texts.md",
+        [
+          {
+            id: "k3x9q2",
+            category: "finding",
+            page: 1,
+            text: "Students who read on paper remembered more of the argument, while students who read on screen remembered as many facts.",
+          },
+          {
+            id: "b71zdm",
+            category: "method",
+            page: 2,
+            text: "We asked 1,204 first-year students at three universities to keep a reading log for eight weeks.",
+          },
+        ],
+      ),
   },
-  files: [],
+  files: Object.keys(SAMPLE_FILES).sort(),
 };
+
+export { SAMPLE_FILES };

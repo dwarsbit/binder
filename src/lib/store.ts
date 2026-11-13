@@ -22,6 +22,14 @@ export interface BinderStore {
   fileUrl(path: string): Promise<string | null>;
   /** Opens a file in the app your computer opens it with, or saves it. */
   openFile(path: string): Promise<void>;
+  /** A file's bytes; null when it can't be read. Also reads `.binder/`. */
+  readBytes(path: string): Promise<ArrayBuffer | null>;
+  /** The checksum of every file, by path; absent where files have none. */
+  fileHashes?(): Promise<Record<string, string>>;
+  /** Fetches a web address: a page with its HTML, or anything else with its type. Desktop only. */
+  fetchWeb?(url: string): Promise<{ url: string; contentType: string; html: string }>;
+  /** Saves the file behind a web address into the binder. Desktop only. */
+  download?(url: string, path: string): Promise<void>;
 }
 
 /** The binder with a page, file or folder moved; a folder takes its contents along. */
@@ -143,6 +151,25 @@ export function desktopStore(
       return url;
     },
     openFile: (path) => invoke<void>("project_open_file", { dir, path }).catch(fail),
+    readBytes: (path) =>
+      invoke<ArrayBuffer>("project_read_file", { dir, path }).catch(() => null),
+    fileHashes: async () => {
+      const files = await invoke<Record<string, { hash: string }>>("project_files", {
+        dir,
+      }).catch(fail);
+      return Object.fromEntries(
+        Object.entries(files).map(([path, info]) => [path, info.hash]),
+      );
+    },
+    fetchWeb: (url) =>
+      invoke<{ url: string; contentType: string; html: string }>("web_fetch", {
+        url,
+      }).catch(fail),
+    download: (url, path) =>
+      enqueue(async () => {
+        await invoke<void>("web_download", { dir, url, path });
+        forget(path);
+      }).catch(fail),
     rename: async (from, to) => {
       forget(from);
       await flush().catch(() => {});
@@ -171,14 +198,17 @@ const dataUrl = (data: Blob) =>
     reader.readAsDataURL(data);
   });
 
-const KEY = "binder.demo.v1";
-const FILES_KEY = "binder.demo-files.v1";
+const KEY = "binder.demo.v2";
+const FILES_KEY = "binder.demo-files.v2";
 
 /**
  * A binder kept in this browser's storage: the demo that `pnpm dev`
  * opens. It starts as a copy of `seed`.
  */
-export function browserStore(seed: Project): BinderStore {
+export function browserStore(
+  seed: Project,
+  seedFiles: Record<string, string> = {},
+): BinderStore {
   let project: Project | null = null;
   let files: Record<string, string> | null = null;
 
@@ -188,9 +218,11 @@ export function browserStore(seed: Project): BinderStore {
       const raw = localStorage.getItem(FILES_KEY);
       const value: unknown = raw ? JSON.parse(raw) : null;
       files =
-        value && typeof value === "object" ? (value as Record<string, string>) : {};
+        value && typeof value === "object"
+          ? (value as Record<string, string>)
+          : { ...seedFiles };
     } catch {
-      files = {};
+      files = { ...seedFiles };
     }
     return files;
   };
@@ -269,6 +301,19 @@ export function browserStore(seed: Project): BinderStore {
       writeFiles({ ...readFiles(), [path]: await dataUrl(data) });
     },
     fileUrl: async (path) => readFiles()[path] ?? null,
+    readBytes: async (path) => {
+      const url = readFiles()[path];
+      if (!url) return null;
+      const comma = url.indexOf(",");
+      try {
+        const binary = atob(url.slice(comma + 1));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes.buffer;
+      } catch {
+        return null;
+      }
+    },
     openFile: async (path) => {
       const url = readFiles()[path];
       if (!url) return;

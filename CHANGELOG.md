@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 (unreleased)
+
+- Read a PDF or a web page in Binder: choose **Read** on its item. Zoom in and out, and find text in the source with Cmd/Ctrl + F.
+- Highlight text in a source as a claim, definition, method, finding or quote. The highlights are listed next to the source, and a click goes back to each one.
+- Take a highlight into your notes: drag it in, or choose **Add to notes**. It becomes a quote with a link to its page, and the link opens the source there.
+- A link you add in the desktop app keeps the page's text, so you can read and highlight it without the site. A link to a PDF adds the PDF. For a web page you added before, choose **Keep the page text**.
+- Search finds text inside every PDF and kept page, by page, and opens the source at the match.
+- Highlights are kept in a Markdown file next to their item, and go along when the item gets a new name. See [the binder format](docs/format.md).
+
 ## 0.1.0 (unreleased)
 
 - Make a binder for a research project and write down your research question. A binder is a folder in the Binder folder in your home folder; open any other folder as a binder too.

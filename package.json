@@ -14,12 +14,13 @@
   },
   "packageManager": "pnpm@12.6.0",
   "dependencies": {
-    "@cursive/editor": "github:dwarsbit/cursive#ed4353c339a279b0bd165e43532e9ee7e7839af3&path:packages/editor",
+    "@cursive/editor": "github:dwarsbit/cursive#02139520192343d4165d6685225a06ee944877f3&path:packages/editor",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tiptap/core": "^3.33.1",
     "@tiptap/react": "^3.33.0",
     "lucide-react": "^1.71.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

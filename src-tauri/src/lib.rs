@@ -2,6 +2,7 @@ mod history;
 mod links;
 mod project;
 mod projects;
+mod web;
 mod zotero;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -33,6 +34,8 @@ pub fn run() {
             zotero::zotero_key_delete,
             zotero::bibtex_read,
             links::open_in_browser,
+            web::web_fetch,
+            web::web_download,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Binder");

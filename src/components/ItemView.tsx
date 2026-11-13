@@ -1,5 +1,7 @@
 import {
   ArrowLeft,
+  BookOpen,
+  Globe,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -73,6 +75,9 @@ function TextField({
     </>
   );
 }
+
+const READ_BUTTON =
+  "inline-flex h-6 flex-none items-center gap-1.5 rounded-[5px] border border-primary-edge bg-primary-fill px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary-fill/85";
 
 const LINK_BUTTON =
   "inline-flex h-6 flex-none items-center gap-1 rounded-[5px] px-1.5 text-xs font-medium text-tint-foreground hover:bg-tint-soft";
@@ -281,6 +286,11 @@ export interface ItemViewProps {
   onMarkdown: (markdown: string) => void;
   onOpenFile: (path: string) => void;
   onOpenLink: (url: string) => void;
+  /** Opens the item's file in the reader; absent when it can't be read there. */
+  onRead?: () => void;
+  /** Keeps the text of the item's web page; absent where the app can't fetch it. */
+  onKeep?: () => void;
+  keeping?: boolean;
   onDelete: () => void;
   backlinks: Backlink[];
   focusRef: React.RefObject<(() => void) | null>;
@@ -331,6 +341,12 @@ export function ItemView({ focusRef, focusEndRef, titleRef, ...props }: ItemView
           </button>
         )}
         <span className="flex-1" />
+        {props.onRead && (
+          <button type="button" className={READ_BUTTON} onClick={props.onRead}>
+            <BookOpen className="size-3.5" aria-hidden />
+            Read
+          </button>
+        )}
         {props.position && props.position.total > 1 && (
           <>
             <span className="tabular-nums">
@@ -468,6 +484,22 @@ export function ItemView({ focusRef, focusEndRef, titleRef, ...props }: ItemView
                 }
               />
             ))}
+            {!item.file && props.onKeep && (
+              <>
+                <dt>File</dt>
+                <dd>
+                  <button
+                    type="button"
+                    className={LINK_BUTTON}
+                    disabled={props.keeping}
+                    onClick={props.onKeep}
+                  >
+                    <Globe className="size-3" aria-hidden />
+                    {props.keeping ? "Keeping the page…" : "Keep the page text"}
+                  </button>
+                </dd>
+              </>
+            )}
             {item.file && (
               <>
                 <dt>File</dt>
