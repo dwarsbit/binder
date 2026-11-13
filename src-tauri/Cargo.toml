@@ -1,0 +1,42 @@
+[package]
+name = "binder"
+version = "0.1.0"
+description = "Binder - collect, explore and understand the material of a research project"
+authors = ["Leon"]
+edition = "2021"
+
+[lib]
+# The `_lib` suffix keeps the lib name from clashing with the bin name
+# on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "binder_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-window-state = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+trash = "5"
+tauri-plugin-opener = "2"
+sha2 = "0.10"
+percent-encoding = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", features = ["apple-native"] }
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3.6", features = ["windows-native"] }
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

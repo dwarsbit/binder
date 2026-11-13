@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Binder",
+  "version": "0.1.0",
+  "identifier": "com.dwarsbit.binder",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1440",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Binder",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 420,
+        "minHeight": 400,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "dragDropEnabled": false,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 32
+        }
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: https:",
+        "font-src": "'self' data:",
+        "connect-src": "'self' ipc: http://ipc.localhost https://api.zotero.org https://api.crossref.org https://openlibrary.org",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "Collect, explore and understand your research material",
+    "longDescription": "Binder keeps the material of a research project in one place: the books and articles you read, links, notes and thoughts. Each binder is a folder of Markdown files on your computer, and works with Zotero.",
+    "copyright": "Copyright (c) 2026 Leon"
+  }
+}
