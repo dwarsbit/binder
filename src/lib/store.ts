@@ -198,8 +198,8 @@ const dataUrl = (data: Blob) =>
     reader.readAsDataURL(data);
   });
 
-const KEY = "binder.demo.v2";
-const FILES_KEY = "binder.demo-files.v2";
+const KEY = "binder.demo.v3";
+const FILES_KEY = "binder.demo-files.v3";
 
 /**
  * A binder kept in this browser's storage: the demo that `pnpm dev`

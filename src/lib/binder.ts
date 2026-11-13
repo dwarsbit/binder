@@ -88,6 +88,8 @@ export interface Item {
   added: string;
   /** The notes: the file's body. */
   markdown: string;
+  /** False when the assistant is to stay away from the item. */
+  assistant: boolean;
 }
 
 /** The properties Binder writes, in the order it writes them. */
@@ -106,6 +108,7 @@ const KEYS = [
   "zotero-version",
   "tags",
   "added",
+  "assistant",
 ] as const;
 type Key = (typeof KEYS)[number];
 
@@ -129,6 +132,10 @@ const list = (properties: Property[], key: string): string[] => {
 /** A page's title, or its file's name without `.md`. */
 const titleOf = (path: string, title: string) =>
   title.trim() || baseName(path).replace(/\.md$/i, "");
+
+/** Whether an `assistant` property keeps the assistant out: `false`, or `off` as typed by hand. */
+const keepsOut = (value: string) =>
+  ["false", "off", "no"].includes(value.toLowerCase());
 
 /** Reads an item from its file. */
 export function readItem(path: string, source: string): Item {
@@ -155,6 +162,7 @@ export function readItem(path: string, source: string): Item {
     tags: list(properties, "tags"),
     added: text(properties, "added"),
     markdown: page.markdown,
+    assistant: !keepsOut(text(properties, "assistant")),
   };
 }
 
@@ -190,11 +198,13 @@ export function setProperties(source: string, changes: ItemChanges): string {
               .map((v) => v.trim())
               .filter(Boolean),
           }
-        : key === "year" && /^\d+$/.test(value)
-          ? { kind: "number", key, value }
-          : key === "added" && /^\d{4}-\d{2}-\d{2}$/.test(value)
-            ? { kind: "date", key, value }
-            : { kind: "text", key, value: value.trim() };
+        : key === "assistant"
+          ? { kind: "boolean", key, value: false }
+          : key === "year" && /^\d+$/.test(value)
+            ? { kind: "number", key, value }
+            : key === "added" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+              ? { kind: "date", key, value }
+              : { kind: "text", key, value: value.trim() };
     if (at >= 0) {
       properties = properties.map((p, index) => (index === at ? next : p));
       continue;
@@ -270,17 +280,39 @@ export function newItemSource(item: NewItem, added = today()): string {
 export interface BinderInfo {
   format: number;
   question: string;
+  /** False when the binder keeps the assistant out. */
+  assistant: boolean;
 }
 
 export function readBinderInfo(project: Project): BinderInfo {
   const source = project.pages[BINDER_FILE];
-  if (source === undefined) return { format: FORMAT, question: "" };
+  if (source === undefined) return { format: FORMAT, question: "", assistant: true };
   const page = readPage(source);
-  const version = Number(text(parseProperties(page.properties), "binder"));
+  const properties = parseProperties(page.properties);
+  const version = Number(text(properties, "binder"));
   return {
     format: Number.isInteger(version) && version > 0 ? version : FORMAT,
     question: page.markdown.trim(),
+    assistant: !keepsOut(text(properties, "assistant")),
   };
+}
+
+/** `binder.md` with the assistant let in or kept out. Its other lines stay as written. */
+export function writeBinderAssistant(source: string | undefined, on: boolean): string {
+  const page = readPage(source ?? "");
+  let properties = parseProperties(page.properties).filter(
+    (p) => p.kind === "raw" || p.key !== "assistant",
+  );
+  if (!properties.some((p) => p.kind !== "raw" && p.key === "binder"))
+    properties = [
+      { kind: "number", key: "binder", value: String(FORMAT) },
+      ...properties,
+    ];
+  if (!on) {
+    const at = properties.findIndex((p) => p.kind !== "raw" && p.key === "binder");
+    properties.splice(at + 1, 0, { kind: "boolean", key: "assistant", value: false });
+  }
+  return writePage({ ...page, properties: formatProperties(properties) });
 }
 
 /** `binder.md` with this research question. Its other lines stay as written. */
@@ -297,10 +329,14 @@ export function writeBinderInfo(source: string | undefined, question: string): s
   });
 }
 
-/** Every item of a binder: every Markdown file but `binder.md` and the highlights files. */
+/** Files next to an item that aren't items: its highlights and what the assistant wrote. */
+export const isCompanionPath = (path: string) =>
+  /\.(?:highlights|assistant)\.md$/i.test(path);
+
+/** Every item of a binder: every Markdown file but `binder.md` and the files next to items. */
 export function itemsOf(project: Project): Item[] {
   return Object.entries(project.pages)
-    .filter(([path]) => path !== BINDER_FILE && !/\.highlights\.md$/i.test(path))
+    .filter(([path]) => path !== BINDER_FILE && !isCompanionPath(path))
     .map(([path, source]) => readItem(path, source));
 }
 

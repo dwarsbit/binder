@@ -1,9 +1,11 @@
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronUp,
   GripVertical,
   Search,
+  Sparkles,
   TextQuote,
   Trash2,
   X,
@@ -25,11 +27,13 @@ import { openPdf, pageText, type PdfDocument } from "@/lib/pdf";
 import { htmlPages, isPdf, matchesIn } from "@/lib/text";
 import { keptArticle } from "@/lib/webpage";
 
-/** Where the reader goes: a page, a highlight, or a text to find. */
+/** Where the reader goes: a page, a highlight, a passage, or a text to find. */
 export interface ReaderTarget {
   page: number | null;
   highlight: string | null;
   find: string | null;
+  /** The words of a passage, from a link the assistant wrote. */
+  passage: string | null;
   /** Counts the requests: the same place asked for twice is gone to twice. */
   nonce: number;
 }
@@ -60,11 +64,19 @@ const ZOOMS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 /** The widest a page is drawn at 100%, in CSS pixels. */
 const FIT_MAX = 860;
 
+/** A highlight as drawn: a class of its own for proposed highlights and passages. */
+type Marked = Highlight & { className?: string };
+
+/** The id a passage from a link is drawn under. */
+const PASSAGE = "passage";
+/** Proposed highlights are drawn under their id with this before it. */
+const PROPOSED = "proposed:";
+
 /** Draws the highlights and what is found on one page of the source. */
 function paintMarks(
   page: Element,
   textRoot: Element,
-  highlights: Highlight[],
+  highlights: Marked[],
   finding: Finding | null,
   pageNumber: number | null,
 ) {
@@ -96,7 +108,7 @@ function paintMarks(
     if (highlight.page !== pageNumber) continue;
     add(
       rangeOf(textRoot, highlight.text, 0, map),
-      `hl-mark hl-${highlight.category}`,
+      highlight.className ?? `hl-mark hl-${highlight.category}`,
       highlight.id,
     );
   }
@@ -137,7 +149,7 @@ function reach(page: Element, pending: Pending): boolean {
 interface SourceProps {
   bytes: ArrayBuffer;
   zoom: number;
-  highlights: Highlight[];
+  highlights: Marked[];
   finding: Finding | null;
   /** Where to go, once: a page and maybe a highlight or the match shown. */
   request: Request | null;
@@ -444,6 +456,51 @@ function HtmlSource(props: SourceProps) {
   );
 }
 
+/** A highlight the assistant proposes: keep it, or dismiss it. */
+function ProposedCard({
+  highlight,
+  onOpen,
+  onKeep,
+  onDismiss,
+}: {
+  highlight: Highlight;
+  onOpen: () => void;
+  onKeep: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <li className={cn("highlight-card proposed-card", `card-${highlight.category}`)}>
+      <div className="flex items-center gap-1 text-2xs text-muted-foreground">
+        <span className={cn("category-dot", `dot-${highlight.category}`)} />
+        <span className="px-1">{categoryLabel(highlight.category)}</span>
+        {highlight.page && <span className="tabular-nums">p. {highlight.page}</span>}
+        <span className="flex-1" />
+        <button
+          type="button"
+          className="card-button"
+          aria-label="Keep highlight"
+          title="Keep highlight"
+          onClick={onKeep}
+        >
+          <Check className="size-3.5" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="card-button"
+          aria-label="Dismiss highlight"
+          title="Dismiss highlight"
+          onClick={onDismiss}
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+      </div>
+      <button type="button" className="highlight-text" onClick={onOpen}>
+        {highlight.text}
+      </button>
+    </li>
+  );
+}
+
 /** One highlight in the side panel: drag it into the notes, or add it there. */
 function HighlightCard({
   highlight,
@@ -520,6 +577,10 @@ export interface ReaderProps {
   file: string;
   readBytes: (path: string) => Promise<ArrayBuffer | null>;
   highlights: Highlight[];
+  /** Highlights the assistant proposes, to keep or dismiss. */
+  proposed: Highlight[];
+  onKeepProposed: (ids: string[] | "all") => void;
+  onDismissProposed: (id: string) => void;
   onAddHighlight: (highlight: Omit<Highlight, "id">) => void;
   onChangeHighlight: (id: string, category: Category) => void;
   onRemoveHighlight: (id: string) => void;
@@ -535,7 +596,33 @@ export interface ReaderProps {
 
 /** A source to read and highlight, with the highlights and notes next to it. */
 export function Reader(props: ReaderProps) {
-  const { file, readBytes, highlights, target } = props;
+  const { file, readBytes, highlights, proposed, target } = props;
+  // The passage a link from the assistant's writing opened, marked until another is.
+  const [passage, setPassage] = useState<{ page: number | null; text: string } | null>(
+    null,
+  );
+  const marks = useMemo<Marked[]>(
+    () => [
+      ...highlights,
+      ...proposed.map((h) => ({
+        ...h,
+        id: PROPOSED + h.id,
+        className: `hl-mark hl-proposed hl-${h.category}`,
+      })),
+      ...(passage
+        ? [
+            {
+              id: PASSAGE,
+              category: "quote" as const,
+              page: passage.page,
+              text: passage.text,
+              className: "hl-mark hl-passage",
+            },
+          ]
+        : []),
+    ],
+    [highlights, proposed, passage],
+  );
   const [bytes, setBytes] = useState<{ file: string; data: ArrayBuffer | null } | null>(
     null,
   );
@@ -620,12 +707,15 @@ export function Reader(props: ReaderProps) {
       setQuery(target.find);
       setCurrent(0);
     }
+    if (target.passage) setPassage({ page: target.page, text: target.passage });
     go({
       page: target.page,
       highlight:
         target.highlight && highlights.some((h) => h.id === target.highlight)
           ? target.highlight
-          : null,
+          : target.passage
+            ? PASSAGE
+            : null,
       find: Boolean(target.find),
     });
   }
@@ -831,7 +921,7 @@ export function Reader(props: ReaderProps) {
             <PdfSource
               bytes={data}
               zoom={zoom}
-              highlights={highlights}
+              highlights={marks}
               finding={finding}
               request={request}
               scroller={scroller}
@@ -843,7 +933,7 @@ export function Reader(props: ReaderProps) {
             <HtmlSource
               bytes={data}
               zoom={zoom}
-              highlights={highlights}
+              highlights={marks}
               finding={finding}
               request={request}
               scroller={scroller}
@@ -884,6 +974,37 @@ export function Reader(props: ReaderProps) {
               </p>
             )}
           </section>
+          {proposed.length > 0 && (
+            <section className="reader-proposed" aria-label="Proposed highlights">
+              <h2 className="panel-heading">
+                <Sparkles className="size-3 text-tint" aria-hidden />
+                Proposed by the assistant
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  className="h-6 rounded-[5px] px-1.5 text-xs font-medium text-tint-foreground hover:bg-tint-soft"
+                  onClick={() => props.onKeepProposed("all")}
+                >
+                  Keep all
+                </button>
+              </h2>
+              <ul className="highlight-list">
+                {[...proposed]
+                  .sort((a, b) => (a.page ?? 0) - (b.page ?? 0))
+                  .map((h) => (
+                    <ProposedCard
+                      key={h.id}
+                      highlight={h}
+                      onOpen={() =>
+                        go({ page: h.page, highlight: PROPOSED + h.id, find: false })
+                      }
+                      onKeep={() => props.onKeepProposed([h.id])}
+                      onDismiss={() => props.onDismissProposed(h.id)}
+                    />
+                  ))}
+              </ul>
+            </section>
+          )}
           <section className="reader-notes" aria-label="Notes">
             <h2 className="panel-heading">
               Notes

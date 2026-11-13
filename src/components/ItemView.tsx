@@ -292,6 +292,8 @@ export interface ItemViewProps {
   onKeep?: () => void;
   keeping?: boolean;
   onDelete: () => void;
+  /** What the assistant wrote about the item, between its details and the notes. */
+  assistant?: React.ReactNode;
   backlinks: Backlink[];
   focusRef: React.RefObject<(() => void) | null>;
   focusEndRef: React.RefObject<(() => void) | null>;
@@ -526,6 +528,7 @@ export function ItemView({ focusRef, focusEndRef, titleRef, ...props }: ItemView
               </>
             )}
           </dl>
+          {props.assistant}
           <Editor
             markdown={item.markdown}
             onChange={(change) => props.onMarkdown(change.markdown)}

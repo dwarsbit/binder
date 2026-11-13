@@ -86,6 +86,44 @@ under its details. Binder keeps the page's article, without the site's
 menus and ads. Keeping pages and adding PDFs from links works in the
 desktop app.
 
+## Let the assistant read
+
+The assistant reads a source for you: it proposes what the source is,
+sums it up for your research question, says which parts to read closely,
+outlines a long source and proposes highlights. It is off until you set
+it up in **Settings**, under **Assistant**:
+
+- **A model on your computer**: choose Ollama or LM Studio, and a model
+  you have downloaded there. Nothing leaves your computer.
+- **A provider**: choose Mistral, OpenAI or Anthropic, paste your own API
+  key and choose a model. The text of the sources the assistant reads
+  goes to that provider, and Settings names it. Your key is kept in your
+  system's credential store. A provider works in the desktop app.
+- **Other**: any service that speaks the OpenAI chat API, by its address.
+
+With **Read new sources as they come in** on, the assistant reads each
+PDF or web page you add. To have it read one you added before, choose
+**Ask the assistant to read it** on the item. **Keep it away** keeps the
+assistant from that item, and **Use the assistant in this binder** in
+Settings keeps it out of the whole binder.
+
+What the assistant wrote shows under the item's details, marked as the
+assistant's and apart from your notes. Nothing in your item changes until
+you say so:
+
+- **Proposal**: the kind, title, authors, year and tags it proposes.
+  Change what you like, then **Accept**, or **Dismiss** it. An item
+  with a proposal has a mark in your inbox.
+- **Summary**, **Read closely** and **Outline**: each sentence ends in a
+  link to the passage it rests on, which opens the source there. Binder
+  checks every passage against the source and leaves out what it can't
+  find. **Take over** moves a part to your notes, where it is yours.
+- **Proposed highlights**: they show in the reader, dashed, next to your
+  own. Keep the ones you want.
+
+A model can still misread a passage. Check what matters against the
+source, as you would a note from a fellow student.
+
 ## Write notes
 
 Under an item's details you write your notes on it, in blocks: type `/`
@@ -107,6 +145,7 @@ item or source.
 
 A binder is a folder of Markdown files: `binder.md` with the research
 question, and an `items` folder with one file for each item, the original
-files next to them and the highlights in a file of their own. You can open the items in Cursive, Obsidian
+files next to them, and the highlights and what the assistant wrote each
+in a file of their own. You can open the items in Cursive, Obsidian
 or any text editor, and keep the folder in a synced folder or in Git.
 [The binder format](format.md) says what is in each file.

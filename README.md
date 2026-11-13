@@ -40,10 +40,10 @@ Polemic kit, with [Polemic](https://github.com/dwarsbit/polemic) for
 writing in LaTeX and [Cursive](https://github.com/dwarsbit/cursive) for
 notes, presentations and tutorials.
 
-Binder is in early development. This is version 0.2: collecting,
-organizing and reading, with highlights in PDFs and web pages. An
-assistant that works on your own AI provider or a model on your computer
-comes in 0.3.
+Binder is in early development. This is version 0.3: collecting,
+organizing and reading, with highlights in PDFs and web pages, and an
+assistant on your own AI provider or a model on your computer that reads
+your sources and sums them up. Asking your sources questions comes in 0.4.
 
 ## Features
 
@@ -66,6 +66,12 @@ comes in 0.3.
   with zoom and find. Highlight a claim, definition, method, finding or
   quote, and drag it into your notes: it keeps a link to its page. A link
   you add keeps the page's text, so you can read it without the site.
+- **Assistant**: on a provider with your own key, or a model on your
+  computer. It proposes each new source's details and tags, sums it up for
+  your research question, says what to read closely, outlines a long
+  source and proposes highlights. Every sentence links to the passage it
+  rests on, checked against the source, and nothing changes until you
+  accept it or take it over.
 - **Notes in blocks**: write on any item, or add a note of your own, with
   the blocks of Cursive: headings, lists, quotes, callouts, tables,
   equations and `@` citations. Link items with `[[`.

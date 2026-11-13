@@ -4,6 +4,7 @@ import {
   fileNameFor,
   freeItemPath,
   itemByline,
+  itemsOf,
   kindOfFile,
   newItemSource,
   readBinderInfo,
@@ -11,6 +12,7 @@ import {
   setProperties,
   tagCounts,
   thoughtTitle,
+  writeBinderAssistant,
   writeBinderInfo,
   zoteroKeyOf,
   zoteroLink,
@@ -151,13 +153,53 @@ describe("the binder file", () => {
     expect(readBinderInfo(project)).toEqual({
       format: 1,
       question: "Do students read less on screen?",
+      assistant: true,
     });
     expect(readBinderInfo({ ...project, pages: {} })).toEqual({
       format: 1,
       question: "",
+      assistant: true,
     });
     const later = { ...project, pages: { "binder.md": "---\nbinder: 3\n---\n" } };
     expect(readBinderInfo(later).format).toBe(3);
+  });
+
+  it("keeps the assistant out of a binder and lets it in again", () => {
+    const off = writeBinderAssistant(
+      "---\nbinder: 1\nmine: 2\n---\n\nQuestion?\n",
+      false,
+    );
+    expect(off).toBe("---\nbinder: 1\nassistant: false\nmine: 2\n---\n\nQuestion?\n");
+    const project = { name: "Thesis", folders: [], pages: { "binder.md": off } };
+    expect(readBinderInfo(project).assistant).toBe(false);
+    expect(writeBinderAssistant(off, true)).toBe(
+      "---\nbinder: 1\nmine: 2\n---\n\nQuestion?\n",
+    );
+    expect(writeBinderAssistant(undefined, false)).toBe(
+      "---\nbinder: 1\nassistant: false\n---\n\n",
+    );
+  });
+
+  it("keeps the assistant away from an item", () => {
+    const source = "---\ntitle: A\nkind: article\n---\n";
+    expect(readItem("items/A.md", source).assistant).toBe(true);
+    const off = setProperties(source, { assistant: "false" });
+    expect(off).toContain("assistant: false");
+    expect(readItem("items/A.md", off).assistant).toBe(false);
+    expect(setProperties(off, { assistant: null })).not.toContain("assistant");
+  });
+
+  it("doesn't take the files next to items for items", () => {
+    const items = itemsOf({
+      name: "T",
+      folders: ["items"],
+      pages: {
+        "items/A.md": "---\ntitle: A\n---\n",
+        "items/A.highlights.md": "---\nhighlights-of: A.md\n---\n",
+        "items/A.assistant.md": "---\nassistant-of: A.md\n---\n",
+      },
+    });
+    expect(items.map((i) => i.path)).toEqual(["items/A.md"]);
   });
 });
 

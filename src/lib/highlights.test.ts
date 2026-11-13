@@ -94,12 +94,41 @@ describe("links to a place in a source", () => {
       file: "items/Screen or paper.pdf",
       page: 4,
       highlight: "k3x9q2",
+      text: null,
     });
     expect(placeOfHref("notes", "../items/Screen%20or%20paper.pdf")).toEqual({
       file: "items/Screen or paper.pdf",
       page: null,
       highlight: null,
+      text: null,
     });
+  });
+
+  it("keeps a link whole when the file's name has parentheses", () => {
+    const href = placeHref("items", {
+      file: "items/A (copy).pdf",
+      page: 1,
+      highlight: null,
+    });
+    expect(href).toBe("A%20%28copy%29.pdf#page=1");
+    expect(placeOfHref("items", href)?.file).toBe("items/A (copy).pdf");
+    const [[, moved]] = retargetFileLinks(
+      { "items/A.md": `[p. 1](${href})` },
+      "items/A (copy).pdf",
+      "items/B (2).pdf",
+    );
+    expect(moved).toBe("[p. 1](B%20%282%29.pdf#page=1)");
+  });
+
+  it("carries the words of a passage", () => {
+    const href = placeHref("items", {
+      file: "items/A.pdf",
+      page: 2,
+      highlight: null,
+      text: "students' recall, a week later",
+    });
+    expect(href).toBe("A.pdf#page=2&text=students%27%20recall%2C%20a%20week%20later");
+    expect(placeOfHref("items", href)?.text).toBe("students' recall, a week later");
   });
 
   it("leaves web links and pages alone", () => {

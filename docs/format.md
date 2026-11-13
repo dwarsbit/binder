@@ -18,6 +18,7 @@ Thesis/
     ├── Screen or paper.md
     ├── Screen or paper.pdf
     ├── Screen or paper.highlights.md
+    ├── Screen or paper.assistant.md
     ├── The reading student.md
     ├── Where students read.md
     ├── Where students read.html
@@ -47,9 +48,10 @@ How do first-year students read for their courses, and do they read less
 on screen than on paper?
 ```
 
-| Property | Value                                                                               |
-| -------- | ----------------------------------------------------------------------------------- |
-| `binder` | The version of the format, a whole number. A folder with this property is a binder. |
+| Property    | Value                                                                                                 |
+| ----------- | ----------------------------------------------------------------------------------------------------- |
+| `binder`    | The version of the format, a whole number. A folder with this property is a binder.                   |
+| `assistant` | `false` keeps the assistant out of this binder. Without it, the assistant is on where you set one up. |
 
 The body is the research question, in Markdown. It can be empty.
 
@@ -100,6 +102,7 @@ it doesn't know, such as your own properties, are kept as written.
 | `zotero-version` | The version of the Zotero item when Binder last read it, so Binder can tell when it changed.                                                     |
 | `tags`           | Tags, as a list.                                                                                                                                 |
 | `added`          | The date the item was added, as `YYYY-MM-DD`.                                                                                                    |
+| `assistant`      | `false` keeps the assistant away from this item: it doesn't read it or write about it.                                                           |
 
 The body is your notes on the item, in Markdown, written in Binder's
 blocks. A note or a thought has no source: its body is the note.
@@ -227,6 +230,84 @@ source, as a Markdown link to the file with the page after `#page=`:
   at the page when the highlight is gone.
 - Other apps open the file; most PDF readers go to the page.
 
+## What the assistant wrote
+
+What the assistant writes about an item is kept next to it, in a Markdown
+file named after the item with `.assistant` before `.md`. It is the
+assistant's until you take it over: Binder shows it apart from your
+notes, marked as the assistant's, and nothing in it changes your item
+before you accept it.
+
+```markdown
+---
+assistant-of: Screen or paper.md
+model: mistral-small-latest
+provider: Mistral
+written: 2026-11-13
+proposed-kind: article
+proposed-title: "Screen or paper: how first-year students read course texts"
+proposed-authors: ["Okafor, Nkem", "Brandt, Sofie"]
+proposed-year: 2021
+proposed-tags: [survey, recall]
+---
+
+## Summary
+
+Students who read on paper remembered more of the argument than students who read on screen. [p. 4](Screen%20or%20paper.pdf#page=4&text=students%20who%20read%20on%20paper%20remembered%20more)
+
+## Read closely
+
+- The comparison of recall after a week, the core of the finding. [p. 4](Screen%20or%20paper.pdf#page=4&text=after%20a%20week)
+
+## Outline
+
+- Introduction: why reading on screen matters for first-year students. [p. 1](Screen%20or%20paper.pdf#page=1&text=first-year%20students%20read)
+
+## Proposed highlights
+
+- **Finding** · p. 4 · “Students who read on paper remembered more of the argument.” ^r4k2pa
+```
+
+| Property           | Value                                               |
+| ------------------ | --------------------------------------------------- |
+| `assistant-of`     | The item, as a path from this file's folder         |
+| `model`            | The model that wrote it                             |
+| `provider`         | Where the model ran: a provider, or `this computer` |
+| `written`          | The date it was written, as `YYYY-MM-DD`            |
+| `proposed-kind`    | The kind the assistant proposes for the item        |
+| `proposed-title`   | The title it proposes                               |
+| `proposed-authors` | The authors it proposes, as a list                  |
+| `proposed-year`    | The year it proposes                                |
+| `proposed-tags`    | The tags it proposes, as a list                     |
+
+The `proposed-` properties are the assistant's proposal for the item.
+When you accept it, Binder writes the values to the item and takes the
+lines out. A proposal that matches the item has none.
+
+The body has up to four parts, each under its own heading. Binder reads
+them by their headings and keeps any other part as written.
+
+- **Summary**: what the source says, written for the binder's research
+  question.
+- **Read closely**: the parts worth reading closely, as a list.
+- **Outline**: the parts of a long source, each with a line on what it
+  is about.
+- **Proposed highlights**: passages the assistant proposes to highlight,
+  in the form of the highlights file. When you keep one, it moves to the
+  highlights file.
+
+Every sentence of the summary and every line of the other parts ends in
+a link to its passage: the source file with the page after `#page=` and
+the words it rests on after `text=`. Binder checks each passage
+against the text of the source before it writes the file, and leaves out
+what has none. A link opens the source at the passage. Other apps open
+the file; most PDF readers go to the page.
+
+When you take a part over, it moves to your notes on the item, without
+the mark, and is yours. The file goes away when nothing is left in it.
+Like the highlights file, it is not an item, and it moves and goes away
+with its item.
+
 ## What Binder can rebuild
 
 `.binder/` holds what Binder works out from the files in the binder, so
@@ -237,10 +318,13 @@ again. Leave it out when you share or back up a binder.
 | ------------------- | -------------------------------------------------------------------------------------------------------- |
 | `.binder/text.json` | The text of each PDF and kept web page, by page, for search. Each file's text is kept with its checksum. |
 
+The assistant finds passages in this text: Binder cuts each page into
+passages of a few sentences and looks them up on your computer, so it
+doesn't need a file of its own.
+
 ## Coming later
 
 Later releases add to this format. Each addition is written down here
 before the code that reads it.
 
-- 0.3: what the assistant proposes and writes, marked as the assistant's.
 - 0.5: topics, as a property of items, highlights and notes.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (unreleased)
+
+- Let an assistant read your sources, on your own provider (Mistral, OpenAI, Anthropic or any service with the OpenAI chat API) or a model on your computer (Ollama, LM Studio). Set it up in Settings, which names where the text goes. Your key is kept in your system's credential store.
+- The assistant proposes the kind, title, authors, year and tags of each new source. Change what you like and accept it, or dismiss it. Items with a proposal have a mark in the inbox.
+- It sums a source up for your research question and says which parts to read closely, and outlines a long source. Every sentence links to its passage, which opens the source there. Binder checks each passage against the source and leaves out what it can't find.
+- It proposes highlights, shown dashed in the reader next to your own. Keep the ones you want.
+- What the assistant wrote is marked as its own and kept apart from your notes, in a file next to the item. **Take over** moves a part to your notes. See [the binder format](docs/format.md).
+- Keep the assistant away from one item, or out of a whole binder.
+- Fixed: adding a highlight to empty notes left an empty line above the quote.
+- Fixed: a link to a page of a file with parentheses in its name broke in notes.
+
 ## 0.2.0 (2026-11-13)
 
 - Read a PDF or a web page in Binder: choose **Read** on its item. Zoom in and out, and find text in the source with Cmd/Ctrl + F.

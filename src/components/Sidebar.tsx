@@ -32,6 +32,8 @@ export interface SidebarProps {
   onRenameBinder?: (name: string) => Promise<void>;
   /** Opens another binder, where the app can. */
   onSwitchBinder?: () => void;
+  /** What the assistant is doing, over the settings. */
+  assistantStatus?: React.ReactNode;
   width: number;
   onResize: (width: number) => void;
 }
@@ -341,6 +343,7 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       <div className="flex-none border-t pt-1">
+        {props.assistantStatus}
         <NavRow
           icon={<Settings className={ICON} aria-hidden />}
           label="Settings"

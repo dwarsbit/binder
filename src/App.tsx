@@ -1,7 +1,15 @@
-import { LayoutGrid, Library, List, PanelLeft } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LayoutGrid, Library, List, PanelLeft, Sparkles } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddDialog } from "@/components/AddDialog";
+import { AssistantPanel } from "@/components/AssistantPanel";
 import { Board, ItemList } from "@/components/ItemList";
 import { ItemView } from "@/components/ItemView";
 import { Reader, type ReaderTarget } from "@/components/Reader";
@@ -43,6 +51,7 @@ import {
   extensionOf,
   FORMAT,
   freeItemPath,
+  isCompanionPath,
   ITEMS,
   itemsOf,
   kindOfFile,
@@ -55,9 +64,11 @@ import {
   thoughtTitle,
   titleOfFile,
   today,
+  writeBinderAssistant,
   writeBinderInfo,
   zoteroKeyOf,
   zoteroLink,
+  isOwnWriting,
   type Item,
   type ItemChanges,
   type NewItem,
@@ -94,7 +105,40 @@ import {
   type Highlight,
 } from "@/lib/highlights";
 import { removeFrom, renameIn, type BinderStore } from "@/lib/store";
-import { isPdf, isReadable, normalize, updateIndex, type TextIndex } from "@/lib/text";
+import {
+  isPdf,
+  isReadable,
+  normalize,
+  readText,
+  updateIndex,
+  type TextIndex,
+} from "@/lib/text";
+import {
+  assistantPathOf,
+  isSpent,
+  partOf,
+  PARTS,
+  proposedHighlights,
+  readAssistant,
+  withProposedHighlights,
+  withPart,
+  writeAssistant,
+  hasProposal,
+  type AssistantNote,
+  type PartId,
+  type Proposal,
+} from "@/lib/assistant/file";
+import {
+  assistantSnapshot,
+  canRun,
+  isLocalUrl,
+  providerLabel,
+  receiverOf,
+  subscribeAssistant,
+} from "@/lib/assistant/providers";
+import { budgetFor, readWithAssistant } from "@/lib/assistant/reading";
+import { useAssistantRuns, type Start } from "@/lib/assistant/runs";
+import { completer } from "@/lib/assistant/transport";
 import { keepPage } from "@/lib/webpage";
 
 const escapeHtml = (text: string) =>
@@ -109,7 +153,7 @@ const escapeHtml = (text: string) =>
  * shows by its name. Null for anything else.
  */
 function hrefAt(target: Element): string | null {
-  const link = target.closest?.(".doc a[href]");
+  const link = target.closest?.(".doc a[href], .assistant a.passage-link");
   if (link) return link.getAttribute("href");
   const file = target.closest?.(".doc .node-attachment");
   const dom = file?.closest(".ProseMirror") as
@@ -226,6 +270,11 @@ export default function App({
   const [keeping, setKeeping] = useState(false);
   // The open item's title and path as links last knew them.
   const linked = useRef<{ path: string; title: string } | null>(null);
+  const assistant = useSyncExternalStore(subscribeAssistant, assistantSnapshot);
+  // Sources added since the binder opened, for the assistant to read once their text is in.
+  const newSources = useRef(new Set<string>());
+  // Items that got a new path, by their old one, for work that began before.
+  const moves = useRef(new Map<string, string>());
 
   useEffect(() => {
     let current = true;
@@ -247,7 +296,10 @@ export default function App({
 
   const items = useMemo(() => (project ? sortItems(itemsOf(project)) : []), [project]);
   const info = useMemo(
-    () => (project ? readBinderInfo(project) : { format: FORMAT, question: "" }),
+    () =>
+      project
+        ? readBinderInfo(project)
+        : { format: FORMAT, question: "", assistant: true },
     [project],
   );
   const shown = useMemo(
@@ -365,6 +417,21 @@ export default function App({
       next = { ...next, pages: { ...next.pages, [moved]: text } };
       void persist(store.writePage(moved, text));
     }
+    // So does what the assistant wrote about it.
+    const written = assistantPathOf(selected);
+    if (written in next.pages) {
+      const moved = assistantPathOf(path);
+      next = renameIn(next, written, moved);
+      void persist(store.rename(written, moved));
+      const text = writeAssistant(
+        path,
+        readAssistant(next.pages[moved]),
+        next.pages[moved],
+      );
+      next = { ...next, pages: { ...next.pages, [moved]: text } };
+      void persist(store.writePage(moved, text));
+    }
+    moves.current.set(selected, path);
     if (carried && file && file !== carried) {
       next = renameIn(next, carried, file);
       void persist(store.rename(carried, file));
@@ -458,7 +525,10 @@ export default function App({
       files:
         file && options.data ? [...(latest.files ?? []), file].sort() : latest.files,
     });
-    if (file && options.data) setFilesVersion((n) => n + 1);
+    if (file && options.data) {
+      setFilesVersion((n) => n + 1);
+      if (isReadable(file)) newSources.current.add(path);
+    }
     await store.writePage(path, text);
     if (options.openIt) {
       syncFileName();
@@ -592,6 +662,7 @@ export default function App({
       }
       setFilesVersion((n) => n + 1);
       changeItem(entry.path, { file: baseName(file) });
+      newSources.current.add(entry.path);
       setProblem(null);
     } catch (error) {
       setProblem(`The page wasn't kept. ${messageOf(error)}`);
@@ -616,7 +687,12 @@ export default function App({
   /** Opens an item's source in the reader, at a page, a highlight or a text to find. */
   const readSource = (
     path: string,
-    place: Omit<ReaderTarget, "nonce"> = { page: null, highlight: null, find: null },
+    place: Omit<ReaderTarget, "nonce"> = {
+      page: null,
+      highlight: null,
+      find: null,
+      passage: null,
+    },
   ) => {
     showItem(path);
     setFinding(null);
@@ -643,6 +719,7 @@ export default function App({
       page: place.page,
       highlight: place.highlight,
       find: null,
+      passage: place.text ?? null,
     });
   };
 
@@ -677,6 +754,195 @@ export default function App({
       text: `> “${highlight.text}” [${label}](${href})`,
     };
   };
+
+  /** Takes a page out of the binder, when it is in it. */
+  const removePage = (path: string) => {
+    const latest = fresh.current;
+    if (!latest || !(path in latest.pages)) return;
+    commit(removeFrom(latest, path));
+    void persist(store.remove(path));
+  };
+
+  /** Changes what the assistant wrote about an item; the file goes when nothing is left in it. */
+  const changeAssistant = (
+    itemPath: string,
+    change: (note: AssistantNote) => AssistantNote,
+  ) => {
+    const path = assistantPathOf(itemPath);
+    const before = fresh.current?.pages[path];
+    if (before === undefined) return;
+    const next = change(readAssistant(before));
+    if (isSpent(next)) removePage(path);
+    else writeSource(path, writeAssistant(itemPath, next, before));
+  };
+
+  /** The path an item has now, after the moves since `path` was read. */
+  const pathNow = (path: string) => {
+    let now = path;
+    for (let hops = 0; hops < 20 && moves.current.has(now); hops++)
+      now = moves.current.get(now)!;
+    return now;
+  };
+
+  /** The assistant reads an item's source and writes what it found next to the item. */
+  const startReading: Start = async (path, signal, progress) => {
+    const current = fresh.current;
+    if (!current || !(path in current.pages)) throw new Error("The item is gone.");
+    const entry = readItem(path, current.pages[path]);
+    if (!entry.file || !isReadable(entry.file))
+      throw new Error("It has no PDF or kept page to read.");
+    const settings = assistantSnapshot();
+    if (!canRun(settings)) throw new Error("Set up the assistant in Settings first.");
+    const file = entry.file;
+    progress("Reading the text");
+    const pages = indexed.current?.[file]?.pages.length
+      ? indexed.current[file].pages
+      : await readText(store, file);
+    const { note, unchecked } = await readWithAssistant({
+      item: entry,
+      question: readBinderInfo(current).question,
+      pages,
+      pdf: isPdf(file),
+      tags: tagCounts(itemsOf(current)).map((t) => t.tag),
+      highlights: readHighlights(current.pages[highlightsPathOf(path)]).highlights,
+      linkTo: ({ page, text }) =>
+        placeHref(parentOf(path), { file, page, highlight: null, text }),
+      complete: completer(settings),
+      model: settings.model,
+      provider: providerLabel(settings),
+      budget: budgetFor(isLocalUrl(settings.baseUrl)),
+      written: today(),
+      signal,
+      progress,
+    });
+    if (!note.parts.length && !hasProposal(note.proposal))
+      throw new Error("The model wrote nothing Binder could check against the source.");
+    // The item may have got another name while the assistant read it.
+    const latest = fresh.current;
+    const now = pathNow(path);
+    if (!latest || !(now in latest.pages)) throw new Error("The item is gone.");
+    const target = assistantPathOf(now);
+    const previous = latest.pages[target];
+    const kept = previous
+      ? readAssistant(previous).parts.filter((part) => !part.id)
+      : [];
+    let text = writeAssistant(
+      now,
+      { ...note, parts: [...note.parts, ...kept] },
+      previous,
+    );
+    const fileNow = readItem(now, latest.pages[now]).file;
+    if (fileNow && fileNow !== file)
+      text = retargetFileLinks({ [target]: text }, file, fileNow)[0]?.[1] ?? text;
+    writeSource(target, text);
+    if (!unchecked) return null;
+    return unchecked === 1
+      ? "1 statement was left out: its passage isn't in the source."
+      : `${unchecked} statements were left out: their passage isn't in the source.`;
+  };
+  const runs = useAssistantRuns(startReading);
+
+  /** Whether the assistant may read an item now. */
+  const mayRead = (entry: Item, current: Project) =>
+    canRun(assistantSnapshot()) &&
+    readBinderInfo(current).assistant &&
+    entry.assistant &&
+    Boolean(entry.file && isReadable(entry.file));
+
+  /** New sources whose text is in go to the assistant, when it reads new sources. */
+  const offerNew = (index: TextIndex) => {
+    const current = fresh.current;
+    if (!current || !newSources.current.size) return;
+    const ready: string[] = [];
+    for (const path of [...newSources.current]) {
+      const now = pathNow(path);
+      const source = current.pages[now];
+      if (source === undefined) {
+        newSources.current.delete(path);
+        continue;
+      }
+      const entry = readItem(now, source);
+      if (!entry.file || !index[entry.file]) continue;
+      newSources.current.delete(path);
+      if (
+        assistantSnapshot().auto &&
+        mayRead(entry, current) &&
+        !(assistantPathOf(now) in current.pages)
+      )
+        ready.push(now);
+    }
+    if (ready.length) runs.ask(ready);
+  };
+
+  /** Writes the assistant's proposal, as accepted, to the item. */
+  const acceptProposal = (entry: Item, proposal: Proposal) => {
+    changeAssistant(entry.path, (note) => ({ ...note, proposal: {} }));
+    const changes: ItemChanges = {};
+    if (proposal.kind) changes.kind = proposal.kind;
+    if (proposal.authors) changes.authors = proposal.authors;
+    if (proposal.year) changes.year = proposal.year;
+    if (proposal.tags?.length)
+      changes.tags = [...new Set([...entry.tags, ...proposal.tags])];
+    if (Object.keys(changes).length) changeItem(entry.path, changes);
+    const latestSource = fresh.current?.pages[entry.path];
+    if (
+      proposal.title &&
+      latestSource !== undefined &&
+      proposal.title !== entry.title
+    ) {
+      writeSource(
+        entry.path,
+        writePage({ ...readPage(latestSource), title: proposal.title }),
+      );
+      if (entry.path === selected) syncFileName();
+    }
+  };
+
+  /** Moves a part of what the assistant wrote to the end of the item's notes. */
+  const takeOver = (entry: Item, id: PartId) => {
+    const written = fresh.current?.pages[assistantPathOf(entry.path)];
+    const latestSource = fresh.current?.pages[entry.path];
+    if (written === undefined || latestSource === undefined) return;
+    const part = partOf(readAssistant(written), id);
+    if (!part) return;
+    const page = readPage(latestSource);
+    const heading = PARTS.find((p) => p.id === id)?.heading ?? part.heading;
+    const markdown = `${page.markdown.trim() ? `${page.markdown.trimEnd()}\n\n` : ""}## ${heading}\n\n${part.markdown}\n`;
+    writeSource(entry.path, writePage({ ...page, markdown }));
+    changeAssistant(entry.path, (note) => withPart(note, id, ""));
+    setOpened((n) => n + 1);
+  };
+
+  /** Keeps a highlight the assistant proposed, or all of them: they move to the highlights file. */
+  const keepProposed = (entry: Item, ids: string[] | "all") => {
+    const written = fresh.current?.pages[assistantPathOf(entry.path)];
+    if (written === undefined) return;
+    const proposed = proposedHighlights(readAssistant(written));
+    const keep = proposed.filter((h) => ids === "all" || ids.includes(h.id));
+    changeHighlights(entry.path, (list) => {
+      const taken = list.map((h) => h.id);
+      const added = keep.map((h) => {
+        const id = taken.includes(h.id) ? newHighlightId(taken) : h.id;
+        taken.push(id);
+        return { ...h, id };
+      });
+      return [...list, ...added];
+    });
+    changeAssistant(entry.path, (note) =>
+      withProposedHighlights(
+        note,
+        proposed.filter((h) => !keep.includes(h)),
+      ),
+    );
+  };
+
+  const dismissProposed = (entry: Item, id: string) =>
+    changeAssistant(entry.path, (note) =>
+      withProposedHighlights(
+        note,
+        proposedHighlights(note).filter((h) => h.id !== id),
+      ),
+    );
 
   /** Adds a note and puts the caret in its title. */
   const addNote = async (title = "") => {
@@ -759,10 +1025,13 @@ export default function App({
       next = removeFrom(next, entry.file);
       void persist(store.remove(entry.file));
     }
-    const marks = highlightsPathOf(entry.path);
-    if (marks in current.pages) {
-      next = removeFrom(next, marks);
-      void persist(store.remove(marks));
+    for (const companion of [
+      highlightsPathOf(entry.path),
+      assistantPathOf(entry.path),
+    ]) {
+      if (!(companion in current.pages)) continue;
+      next = removeFrom(next, companion);
+      void persist(store.remove(companion));
     }
     if (reading?.path === entry.path) setReading(null);
     commit(next);
@@ -913,7 +1182,7 @@ export default function App({
   const pageList = useMemo(
     () =>
       linkablePages({ name: "", folders: [], pages: pages ?? {} }).filter(
-        (p) => p.path !== BINDER_FILE && !p.path.endsWith(".highlights.md"),
+        (p) => p.path !== BINDER_FILE && !isCompanionPath(p.path),
       ),
     [pages],
   );
@@ -923,9 +1192,9 @@ export default function App({
     [pages, selected],
   );
   const fileSet = useMemo(() => new Set(files ?? []), [files]);
-  const latest = useRef({ open, addNote, addAttachments });
+  const latest = useRef({ open, addNote, addAttachments, offerNew });
   useEffect(() => {
-    latest.current = { open, addNote, addAttachments };
+    latest.current = { open, addNote, addAttachments, offerNew };
   });
   const workspace = useMemo<Workspace>(
     () => ({
@@ -978,6 +1247,7 @@ export default function App({
         if (cancelled) return;
         indexed.current = index;
         setTextIndex(index);
+        latest.current.offerNew(index);
       },
       () => cancelled,
     ).catch(() => {});
@@ -997,6 +1267,23 @@ export default function App({
   const readingHighlights = useMemo(
     () => readHighlights(marksSource).highlights,
     [marksSource],
+  );
+  // Items with a proposal from the assistant, for the lists.
+  const proposals = useMemo(() => {
+    const found = new Set<string>();
+    for (const [path, text] of Object.entries(pages ?? {})) {
+      if (/\.assistant\.md$/i.test(path) && hasProposal(readAssistant(text).proposal))
+        found.add(path.replace(/\.assistant\.md$/i, ".md"));
+    }
+    return found;
+  }, [pages]);
+  const proposedSource =
+    readingItem && project
+      ? project.pages[assistantPathOf(readingItem.path)]
+      : undefined;
+  const readingProposed = useMemo(
+    () => (proposedSource ? proposedHighlights(readAssistant(proposedSource)) : []),
+    [proposedSource],
   );
   const readBytes = useCallback((path: string) => store.readBytes(path), [store]);
 
@@ -1066,6 +1353,50 @@ export default function App({
           ? "No notes yet."
           : "No items with this tag.";
 
+  const assistantNote = (entry: Item | null) => {
+    const written = entry ? project.pages[assistantPathOf(entry.path)] : undefined;
+    return written === undefined ? null : readAssistant(written);
+  };
+  const itemNote = assistantNote(item);
+  const assistantPanel = item && !isOwnWriting(item.kind) && (
+    <AssistantPanel
+      key={item.path}
+      item={item}
+      note={itemNote}
+      availability={
+        !item.assistant
+          ? "item-off"
+          : mayRead(item, project) && fileSet.has(item.file ?? "")
+            ? "ready"
+            : "unavailable"
+      }
+      receiver={receiverOf(assistant)}
+      running={runs.state.running?.path === item.path ? runs.state.running.step : null}
+      queued={runs.state.queued.includes(item.path)}
+      error={runs.state.errors[item.path] ?? null}
+      message={runs.state.notes[item.path] ?? null}
+      onAsk={() => runs.ask([item.path])}
+      onStop={runs.stop}
+      onDismissMessage={() => runs.dismiss(item.path)}
+      onAccept={(proposal) => acceptProposal(item, proposal)}
+      onDismissProposal={() =>
+        changeAssistant(item.path, (note) => ({ ...note, proposal: {} }))
+      }
+      onTakeOver={(part) => takeOver(item, part)}
+      onDismissPart={(part) =>
+        changeAssistant(item.path, (note) => withPart(note, part, ""))
+      }
+      onRead={
+        item.file && isReadable(item.file) && fileSet.has(item.file)
+          ? () => readSource(item.path)
+          : undefined
+      }
+      onItemAssistant={(on) =>
+        changeItem(item.path, { assistant: on ? null : "false" })
+      }
+    />
+  );
+
   const itemView = item && source !== null && (
     <div className="contents" onClickCapture={(event) => followPlace(event, item.path)}>
       <ItemView
@@ -1103,6 +1434,7 @@ export default function App({
         }
         keeping={keeping}
         onDelete={() => setDeleting(item)}
+        assistant={assistantPanel}
         backlinks={linkedFrom}
         focusRef={focusEditor}
         focusEndRef={focusEditorEnd}
@@ -1132,14 +1464,19 @@ export default function App({
       onRemoveHighlight={(id) =>
         changeHighlights(readingItem.path, (list) => list.filter((h) => h.id !== id))
       }
+      proposed={readingProposed}
+      onKeepProposed={(ids) => keepProposed(readingItem, ids)}
+      onDismissProposed={(id) => dismissProposed(readingItem, id)}
       quoteOf={(highlight) => quoteOf(readingItem, highlight)}
       onAddToNotes={(highlight) => {
         const editor = notesEditor.current;
         if (!editor) return;
+        // Empty notes get the quote in place of their empty line.
+        const end = editor.state.doc.content.size;
         editor
           .chain()
           .insertContentAt(
-            editor.state.doc.content.size,
+            editor.isEmpty ? { from: 0, to: end } : end,
             quoteOf(readingItem, highlight).html,
           )
           .focus("end")
@@ -1205,6 +1542,39 @@ export default function App({
           })
         }
         onSwitchBinder={onSwitchBinder}
+        assistantStatus={
+          runs.state.running && (
+            <div className="assistant-status" role="status">
+              <Sparkles
+                className="size-3.5 flex-none animate-pulse text-tint"
+                aria-hidden
+              />
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left"
+                title={runs.state.running.step}
+                onClick={() => runs.state.running && showItem(runs.state.running.path)}
+              >
+                Reading{" "}
+                {items.find((entry) => entry.path === runs.state.running?.path)
+                  ?.title ?? "a source"}
+                {runs.state.queued.length > 0 && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {runs.state.queued.length} more
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="h-6 flex-none rounded-[5px] px-1.5 text-xs font-medium text-tint-foreground hover:bg-tint-soft"
+                onClick={runs.stop}
+              >
+                Stop
+              </button>
+            </div>
+          )
+        }
         width={sidebarWidth}
         onResize={(width) => {
           setSidebarWidth(width);
@@ -1306,6 +1676,8 @@ export default function App({
                     showStatus={view.kind === "tag"}
                     empty={emptyText}
                     onOpen={open}
+                    proposals={proposals}
+                    reading={runs.state.running?.path ?? null}
                   />
                 </div>
                 <div className="item-pane">
@@ -1373,7 +1745,21 @@ export default function App({
           }}
         />
       )}
-      {settings && <SettingsDialog onClose={() => setSettings(false)} />}
+      {settings && (
+        <SettingsDialog
+          onClose={() => setSettings(false)}
+          assistantOn={info.assistant}
+          onAssistantOn={(on) => {
+            const latestProject = fresh.current;
+            if (!latestProject) return;
+            writeSource(
+              BINDER_FILE,
+              writeBinderAssistant(latestProject.pages[BINDER_FILE], on),
+            );
+            if (!on) runs.stop();
+          }}
+        />
+      )}
       {searching !== null && (
         <SearchDialog
           pages={searchPages}
@@ -1389,6 +1775,7 @@ export default function App({
                 page: found?.file && isPdf(found.file) ? page : null,
                 highlight: null,
                 find: query,
+                passage: null,
               });
               return;
             }
