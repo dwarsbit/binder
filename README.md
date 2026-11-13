@@ -40,10 +40,10 @@ Polemic kit, with [Polemic](https://github.com/dwarsbit/polemic) for
 writing in LaTeX and [Cursive](https://github.com/dwarsbit/cursive) for
 notes, presentations and tutorials.
 
-Binder is in early development. This is version 0.1: collecting and
-organizing. Reading in Binder, with highlights in PDFs and web pages,
-comes in 0.2, and an assistant that works on your own AI provider or a
-model on your computer comes in 0.3.
+Binder is in early development. This is version 0.2: collecting,
+organizing and reading, with highlights in PDFs and web pages. An
+assistant that works on your own AI provider or a model on your computer
+comes in 0.3.
 
 ## Features
 
@@ -62,12 +62,17 @@ model on your computer comes in 0.3.
   reading list, or set it aside, and the next one opens.
 - **Reading list**: five statuses, from inbox to set aside, as a list or
   as a board. Drag a card to another column to change its status.
+- **Read and highlight**: read a PDF or a web page next to your notes,
+  with zoom and find. Highlight a claim, definition, method, finding or
+  quote, and drag it into your notes: it keeps a link to its page. A link
+  you add keeps the page's text, so you can read it without the site.
 - **Notes in blocks**: write on any item, or add a note of your own, with
   the blocks of Cursive: headings, lists, quotes, callouts, tables,
   equations and `@` citations. Link items with `[[`.
 - **Tags**: tag items and see every tag with its items in the sidebar.
 - **Search**: Cmd/Ctrl + K searches titles, authors, journals, DOIs, tags
-  and notes. Cmd/Ctrl + F finds text in the open item.
+  and notes, and the text of every PDF and kept page. Cmd/Ctrl + F finds
+  text in the open item or source.
 - **Your files**: an item is a Markdown file with its details in the front
   matter, as Cursive and Obsidian read it. See [the binder format](docs/format.md).
 

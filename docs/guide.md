@@ -23,7 +23,8 @@ field you can:
 - **paste a DOI**, such as `10.1000/jher.2021.0042`: Binder looks up the
   work at Crossref and fills in its title, authors, year and journal
 - **paste an ISBN**: Binder looks up the book at Open Library
-- **paste a link**: Binder adds the web page by its address
+- **paste a link**: Binder adds the web page and keeps its text, so you
+  can read it in Binder. A link to a PDF adds the PDF.
 - **write a thought**: a question for your supervisor, an idea for a
   chapter. Its first line is its title.
 
@@ -61,6 +62,30 @@ a board. On the board, drag a card to another column to change its
 status. On an item, change its status, kind, authors and other details
 in the fields under its title.
 
+## Read and highlight
+
+An item with a PDF or a kept web page has **Read** at the top. The source
+opens with its highlights and your notes next to it. Zoom with the buttons
+at the top, and find text in the source with Cmd/Ctrl + F.
+
+Select text to highlight it. Pick what it is:
+
+- **Claim**: what the authors argue
+- **Definition**: how they define a term
+- **Method**: how they did the work
+- **Finding**: what they found
+- **Quote**: words you may want to quote
+
+The highlights are listed next to the source; click one to go back to it.
+Drag a highlight into your notes, or choose **Add to notes**: it becomes
+a quote with a link to its page. The link opens the source at that page,
+also from any other note.
+
+A web page you added before Binder kept pages has **Keep the page text**
+under its details. Binder keeps the page's article, without the site's
+menus and ads. Keeping pages and adding PDFs from links works in the
+desktop app.
+
 ## Write notes
 
 Under an item's details you write your notes on it, in blocks: type `/`
@@ -74,12 +99,14 @@ the sidebar.
 ## Find things
 
 Press Cmd/Ctrl + K to search every item: titles, authors, journals, DOIs,
-tags and notes. Press Cmd/Ctrl + F to find text in the open item.
+tags and notes, and the text of every PDF and kept page. A match in a
+source opens it at its page. Press Cmd/Ctrl + F to find text in the open
+item or source.
 
 ## Your files
 
 A binder is a folder of Markdown files: `binder.md` with the research
-question, and an `items` folder with one file for each item and the
-original files next to them. You can open the items in Cursive, Obsidian
+question, and an `items` folder with one file for each item, the original
+files next to them and the highlights in a file of their own. You can open the items in Cursive, Obsidian
 or any text editor, and keep the folder in a synced folder or in Git.
 [The binder format](format.md) says what is in each file.

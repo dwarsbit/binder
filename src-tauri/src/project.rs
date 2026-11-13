@@ -188,7 +188,11 @@ pub fn hash_file(path: &Path) -> std::io::Result<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
 }
 
 /// Hashes already made, by the file's place, size and time of change:
@@ -482,7 +486,10 @@ mod tests {
         // A changed file gets a new hash.
         std::thread::sleep(std::time::Duration::from_millis(20));
         write_file(project.dir(), "attachments/chart.png", b"other bytes").unwrap();
-        assert_ne!(files(project.dir()).unwrap()["attachments/chart.png"].hash, hex);
+        assert_ne!(
+            files(project.dir()).unwrap()["attachments/chart.png"].hash,
+            hex
+        );
         assert!(write_file(project.dir(), "page.md", b"x").is_err());
         assert!(read_file(project.dir(), "../outside.png").is_err());
     }

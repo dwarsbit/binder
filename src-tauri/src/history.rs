@@ -18,7 +18,11 @@ const MAX_SNAPSHOTS: usize = 100;
 
 /// A page's name in the history folder: its path, with `/` and anything
 /// a file name can't hold written as `%xx`.
-const NAME: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'.').remove(b' ');
+const NAME: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'_')
+    .remove(b'.')
+    .remove(b' ');
 
 #[derive(Serialize, Debug, PartialEq, Clone)]
 pub struct Snapshot {
@@ -92,7 +96,11 @@ pub fn keep(
             return Ok(());
         }
         // The same text as the newest snapshot needs no second one.
-        if fs::read_to_string(dir.join(format!("{newest}.md"))).ok().as_deref() == Some(&current) {
+        if fs::read_to_string(dir.join(format!("{newest}.md")))
+            .ok()
+            .as_deref()
+            == Some(&current)
+        {
             return Ok(());
         }
     }
@@ -202,7 +210,11 @@ pub fn project_history_list(
 
 /// Keeps the page as it is now, before a restore replaces it.
 #[tauri::command]
-pub fn project_history_keep(app: tauri::AppHandle, dir: String, path: String) -> Result<(), String> {
+pub fn project_history_keep(
+    app: tauri::AppHandle,
+    dir: String,
+    path: String,
+) -> Result<(), String> {
     let history = project_history(&history_dir(&app)?, &dir)?;
     keep(&history, &dir, &path, None, now_ms())
 }
@@ -241,22 +253,49 @@ mod tests {
         fs::write(project.0.join("Notes/a.md"), "# One\n").unwrap();
 
         // Nothing changes: no snapshot.
-        keep(&history.0, dir, "Notes/a.md", Some("# One\n"), 1_000_000_000_000).unwrap();
+        keep(
+            &history.0,
+            dir,
+            "Notes/a.md",
+            Some("# One\n"),
+            1_000_000_000_000,
+        )
+        .unwrap();
         assert!(list(&history.0, "Notes/a.md").is_empty());
 
-        keep(&history.0, dir, "Notes/a.md", Some("# Two\n"), 1_000_000_000_000).unwrap();
+        keep(
+            &history.0,
+            dir,
+            "Notes/a.md",
+            Some("# Two\n"),
+            1_000_000_000_000,
+        )
+        .unwrap();
         fs::write(project.0.join("Notes/a.md"), "# Two\n").unwrap();
         let kept = list(&history.0, "Notes/a.md");
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].source, "# One\n");
 
         // Within 10 minutes of the last one: none.
-        keep(&history.0, dir, "Notes/a.md", Some("# Three\n"), 1_000_000_060_000).unwrap();
+        keep(
+            &history.0,
+            dir,
+            "Notes/a.md",
+            Some("# Three\n"),
+            1_000_000_060_000,
+        )
+        .unwrap();
         assert_eq!(list(&history.0, "Notes/a.md").len(), 1);
 
         // Later: the next one, newest first.
-        keep(&history.0, dir, "Notes/a.md", Some("# Three\n"), 1_000_000_000_000 + EVERY_MS + 1)
-            .unwrap();
+        keep(
+            &history.0,
+            dir,
+            "Notes/a.md",
+            Some("# Three\n"),
+            1_000_000_000_000 + EVERY_MS + 1,
+        )
+        .unwrap();
         let kept = list(&history.0, "Notes/a.md");
         assert_eq!(kept.len(), 2);
         assert_eq!(kept[0].source, "# Two\n");
@@ -264,7 +303,14 @@ mod tests {
 
         // Before a restore: kept whatever the age of the newest.
         fs::write(project.0.join("Notes/a.md"), "# Three\n").unwrap();
-        keep(&history.0, dir, "Notes/a.md", None, 1_000_000_000_000 + EVERY_MS + 2).unwrap();
+        keep(
+            &history.0,
+            dir,
+            "Notes/a.md",
+            None,
+            1_000_000_000_000 + EVERY_MS + 2,
+        )
+        .unwrap();
         assert_eq!(list(&history.0, "Notes/a.md")[0].source, "# Three\n");
     }
 
@@ -276,8 +322,22 @@ mod tests {
         fs::create_dir_all(project.0.join("Notes")).unwrap();
         fs::write(project.0.join("Notes/a b.md"), "Old\n").unwrap();
         fs::write(project.0.join("top.md"), "Old top\n").unwrap();
-        keep(&history.0, dir, "Notes/a b.md", Some("New\n"), 2_000_000_000_000).unwrap();
-        keep(&history.0, dir, "top.md", Some("New top\n"), 2_000_000_000_000).unwrap();
+        keep(
+            &history.0,
+            dir,
+            "Notes/a b.md",
+            Some("New\n"),
+            2_000_000_000_000,
+        )
+        .unwrap();
+        keep(
+            &history.0,
+            dir,
+            "top.md",
+            Some("New top\n"),
+            2_000_000_000_000,
+        )
+        .unwrap();
 
         rename(&history.0, "Notes", "Reading");
         assert!(list(&history.0, "Notes/a b.md").is_empty());

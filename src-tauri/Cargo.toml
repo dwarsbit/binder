@@ -24,6 +24,7 @@ trash = "5"
 tauri-plugin-opener = "2"
 sha2 = "0.10"
 percent-encoding = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3.6", features = ["apple-native"] }

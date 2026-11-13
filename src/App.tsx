@@ -4,11 +4,14 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AddDialog } from "@/components/AddDialog";
 import { Board, ItemList } from "@/components/ItemList";
 import { ItemView } from "@/components/ItemView";
+import { Reader, type ReaderTarget } from "@/components/Reader";
 import { FindBar, SearchDialog } from "@/components/Search";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { clampWidth, Sidebar } from "@/components/Sidebar";
 import { ZoteroDialog } from "@/components/ZoteroDialog";
+import type { Editor as TiptapEditor } from "@tiptap/core";
 import { HEADER_BUTTON } from "@cursive/editor/components/Dialog";
+import { Editor } from "@cursive/editor/components/Editor";
 import { cn } from "@cursive/editor/lib/cn";
 import { openFind } from "@cursive/editor/lib/find";
 import {
@@ -35,6 +38,7 @@ import {
   type ZoteroLibrary,
 } from "@cursive/editor/references/zotero";
 import {
+  authorsShort,
   BINDER_FILE,
   extensionOf,
   FORMAT,
@@ -50,6 +54,7 @@ import {
   tagCounts,
   thoughtTitle,
   titleOfFile,
+  today,
   writeBinderInfo,
   zoteroKeyOf,
   zoteroLink,
@@ -78,7 +83,57 @@ import {
   saveSidebarWidth,
   saveView,
 } from "@/lib/prefs";
+import {
+  highlightsPathOf,
+  newHighlightId,
+  placeHref,
+  placeOfHref,
+  readHighlights,
+  retargetFileLinks,
+  writeHighlights,
+  type Highlight,
+} from "@/lib/highlights";
 import { removeFrom, renameIn, type BinderStore } from "@/lib/store";
+import { isPdf, isReadable, normalize, updateIndex, type TextIndex } from "@/lib/text";
+import { keepPage } from "@/lib/webpage";
+
+const escapeHtml = (text: string) =>
+  text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/**
+ * The address of a link clicked in notes: a link, or a file the editor
+ * shows by its name. Null for anything else.
+ */
+function hrefAt(target: Element): string | null {
+  const link = target.closest?.(".doc a[href]");
+  if (link) return link.getAttribute("href");
+  const file = target.closest?.(".doc .node-attachment");
+  const dom = file?.closest(".ProseMirror") as
+    (Element & { editor?: TiptapEditor }) | null;
+  const editor = dom?.editor;
+  if (!file || !editor) return null;
+  let href: string | null = null;
+  editor.state.doc.descendants((node, pos) => {
+    if (href !== null) return false;
+    if (node.type.name === "attachment" && editor.view.nodeDOM(pos) === file) {
+      href = String(node.attrs.href);
+    }
+    return true;
+  });
+  return href;
+}
+
+/** The view an item lives in: where it opens when it isn't in the one shown. */
+const homeOf = (item: Item): View =>
+  item.status === "inbox"
+    ? { kind: "inbox" }
+    : item.kind === "note" || item.kind === "thought"
+      ? { kind: "notes" }
+      : { kind: "reading" };
 
 /** What the status bar says when everything is saved. */
 const SAVED: Record<BinderStore["place"], string> = {
@@ -162,6 +217,13 @@ export default function App({
   const focusEditor = useRef<(() => void) | null>(null);
   const focusEditorEnd = useRef<(() => void) | null>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
+  // The source being read, and where in it.
+  const [reading, setReading] = useState<{ path: string; target: ReaderTarget } | null>(
+    null,
+  );
+  const notesEditor = useRef<TiptapEditor | null>(null);
+  const [textIndex, setTextIndex] = useState<TextIndex | null>(null);
+  const [keeping, setKeeping] = useState(false);
   // The open item's title and path as links last knew them.
   const linked = useRef<{ path: string; title: string } | null>(null);
 
@@ -289,12 +351,32 @@ export default function App({
     if (path === selected) return retitleLinks(current, selected);
     let next = renameIn(current, selected, path);
     void persist(store.rename(selected, path));
+    // The highlights go along, and say whose they are.
+    const marks = highlightsPathOf(selected);
+    if (marks in next.pages) {
+      const moved = highlightsPathOf(path);
+      next = renameIn(next, marks, moved);
+      void persist(store.rename(marks, moved));
+      const text = writeHighlights(
+        path,
+        readHighlights(next.pages[moved]).highlights,
+        next.pages[moved],
+      );
+      next = { ...next, pages: { ...next.pages, [moved]: text } };
+      void persist(store.writePage(moved, text));
+    }
     if (carried && file && file !== carried) {
       next = renameIn(next, carried, file);
       void persist(store.rename(carried, file));
       const moved = setProperties(next.pages[path], { file: baseName(file) });
       next = { ...next, pages: { ...next.pages, [path]: moved } };
       void persist(store.writePage(path, moved));
+      // Links to places in the file follow it.
+      const writes = retargetFileLinks(next.pages, carried, file);
+      if (writes.length) {
+        next = { ...next, pages: { ...next.pages, ...Object.fromEntries(writes) } };
+        for (const [page, text] of writes) void persist(store.writePage(page, text));
+      }
       setFilesVersion((n) => n + 1);
     }
     commit(next);
@@ -304,6 +386,7 @@ export default function App({
   };
 
   const open = (path: string | null) => {
+    setReading(null);
     if (path !== selected) {
       syncFileName();
       setSelected(path);
@@ -314,6 +397,7 @@ export default function App({
 
   const showView = (next: View) => {
     syncFileName();
+    setReading(null);
     setView(next);
     saveView(viewKey(next));
     setSelected(null);
@@ -343,13 +427,22 @@ export default function App({
   /** Adds an item, with its original file next to it. Gives its path. */
   const addItem = async (
     entry: NewItem,
-    options: { data?: Blob; extension?: string; openIt?: boolean } = {},
+    options: {
+      data?: Blob;
+      /** A web address to save the file from, in place of `data`. */
+      download?: string;
+      extension?: string;
+      openIt?: boolean;
+    } = {},
   ): Promise<string | null> => {
     const current = fresh.current;
     if (!current) return null;
     const { path, file } = freeItemPath(current, entry.title, options.extension ?? "");
     if (options.data && file) {
       await store.writeFile(file, options.data);
+    } else if (options.download && file && store.download) {
+      await store.download(options.download, file);
+      options = { ...options, data: new Blob() };
     }
     const latest = fresh.current ?? current;
     const text = newItemSource({
@@ -422,7 +515,7 @@ export default function App({
     } else {
       const url = urlOf(text);
       if (url && !/\s/.test(text.trim())) {
-        path = await addItem({ title: titleOfUrl(url), kind: "webpage", url });
+        path = await addLink(url);
       } else {
         const title = thoughtTitle(text);
         const lines = text.trim().split(/\r?\n/);
@@ -441,6 +534,148 @@ export default function App({
       setSelected(path);
       setOpened((n) => n + 1);
     }
+  };
+
+  /**
+   * Fetches a web address for the binder, where the app can: a page as
+   * its article, a PDF as the file. Null when there is nothing to keep.
+   */
+  const fetchForBinder = async (
+    url: string,
+  ): Promise<
+    { kind: "page"; title: string; html: string } | { kind: "pdf"; url: string } | null
+  > => {
+    if (!store.fetchWeb) return null;
+    const fetched = await store.fetchWeb(url);
+    if (fetched.contentType === "application/pdf")
+      return { kind: "pdf", url: fetched.url };
+    if (!fetched.html) return null;
+    const kept = keepPage(fetched.html, fetched.url, today());
+    return kept ? { kind: "page", title: kept.title, html: kept.html } : null;
+  };
+
+  /** Adds a link: with the page's text, or its PDF, when the app can fetch it. */
+  const addLink = async (url: string): Promise<string | null> => {
+    const found = await fetchForBinder(url).catch(() => null);
+    if (found?.kind === "page") {
+      return addItem(
+        { title: found.title || titleOfUrl(url), kind: "webpage", url },
+        { data: new Blob([found.html], { type: "text/html" }), extension: ".html" },
+      );
+    }
+    if (found?.kind === "pdf") {
+      return addItem(
+        { title: titleOfUrl(url), kind: "article", url },
+        { download: found.url, extension: ".pdf" },
+      ).catch(() => addItem({ title: titleOfUrl(url), kind: "webpage", url }));
+    }
+    return addItem({ title: titleOfUrl(url), kind: "webpage", url });
+  };
+
+  /** Keeps the text of an item's web page next to it, or the PDF behind its link. */
+  const keepWebPage = async (entry: Item) => {
+    setKeeping(true);
+    try {
+      const found = await fetchForBinder(entry.url);
+      if (!found) throw new Error("This page has no article to keep.");
+      const extension = found.kind === "pdf" ? ".pdf" : ".html";
+      const file = entry.path.replace(/\.md$/i, extension);
+      if (found.kind === "pdf") {
+        if (!store.download) return;
+        await store.download(found.url, file);
+      } else {
+        await store.writeFile(file, new Blob([found.html], { type: "text/html" }));
+      }
+      const latest = fresh.current;
+      if (latest && !(latest.files ?? []).includes(file)) {
+        commit({ ...latest, files: [...(latest.files ?? []), file].sort() });
+      }
+      setFilesVersion((n) => n + 1);
+      changeItem(entry.path, { file: baseName(file) });
+      setProblem(null);
+    } catch (error) {
+      setProblem(`The page wasn't kept. ${messageOf(error)}`);
+    } finally {
+      setKeeping(false);
+    }
+  };
+
+  /** Shows an item, in the view it lives in when the one shown hasn't got it. */
+  const showItem = (path: string) => {
+    const found = itemsOf(fresh.current ?? { name: "", folders: [], pages: {} }).find(
+      (entry) => entry.path === path,
+    );
+    if (found && !inView(found, view)) {
+      const home = homeOf(found);
+      setView(home);
+      saveView(viewKey(home));
+    }
+    if (path !== selected) open(path);
+  };
+
+  /** Opens an item's source in the reader, at a page, a highlight or a text to find. */
+  const readSource = (
+    path: string,
+    place: Omit<ReaderTarget, "nonce"> = { page: null, highlight: null, find: null },
+  ) => {
+    showItem(path);
+    setFinding(null);
+    setReading((current) => ({
+      path,
+      target: { ...place, nonce: (current?.target.nonce ?? 0) + 1 },
+    }));
+  };
+
+  /** A link in notes to a place in a source opens the reader there. */
+  const followPlace = (event: React.MouseEvent, from: string) => {
+    // A link with text selected in it is being edited, not followed.
+    const target = event.target as Element;
+    const href = hrefAt(target);
+    if (href === null) return;
+    if (target.closest?.("a[href]") && !window.getSelection()?.isCollapsed) return;
+    const place = placeOfHref(parentOf(from), href);
+    if (!place || !isReadable(place.file)) return;
+    const owner = items.find((entry) => entry.file === place.file);
+    if (!owner) return;
+    event.preventDefault();
+    event.stopPropagation();
+    readSource(owner.path, {
+      page: place.page,
+      highlight: place.highlight,
+      find: null,
+    });
+  };
+
+  /** Changes the highlights of an item. */
+  const changeHighlights = (
+    itemPath: string,
+    change: (list: Highlight[]) => Highlight[],
+  ) => {
+    const latest = fresh.current;
+    if (!latest) return;
+    const path = highlightsPathOf(itemPath);
+    const before = latest.pages[path];
+    writeSource(
+      path,
+      writeHighlights(itemPath, change(readHighlights(before).highlights), before),
+    );
+  };
+
+  /** A highlight as a quote in notes, with a link back to its place. */
+  const quoteOf = (entry: Item, highlight: Highlight) => {
+    const label =
+      [authorsShort(entry.authors) || entry.title, entry.year]
+        .filter(Boolean)
+        .join(" ") + (highlight.page ? `, p. ${highlight.page}` : "");
+    const href = placeHref(parentOf(entry.path), {
+      file: entry.file ?? "",
+      page: highlight.page,
+      highlight: highlight.id,
+    });
+    return {
+      html: `<blockquote><p>“${escapeHtml(highlight.text)}” <a href="${escapeHtml(href)}">${escapeHtml(label)}</a></p></blockquote>`,
+      text: `> “${highlight.text}” [${label}](${href})`,
+    };
   };
 
   /** Adds a note and puts the caret in its title. */
@@ -524,6 +759,12 @@ export default function App({
       next = removeFrom(next, entry.file);
       void persist(store.remove(entry.file));
     }
+    const marks = highlightsPathOf(entry.path);
+    if (marks in current.pages) {
+      next = removeFrom(next, marks);
+      void persist(store.remove(marks));
+    }
+    if (reading?.path === entry.path) setReading(null);
     commit(next);
     if (selected === entry.path) {
       const at = shown.findIndex((other) => other.path === entry.path);
@@ -585,6 +826,10 @@ export default function App({
         event.stopPropagation();
         const selection = window.getSelection()?.toString().trim() ?? "";
         setSearching(selection.includes("\n") ? "" : selection);
+      } else if (key === "f" && reading) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.dispatchEvent(new Event("binder:find-in-source"));
       } else if (key === "f" && item) {
         event.preventDefault();
         event.stopPropagation();
@@ -668,7 +913,7 @@ export default function App({
   const pageList = useMemo(
     () =>
       linkablePages({ name: "", folders: [], pages: pages ?? {} }).filter(
-        (p) => p.path !== BINDER_FILE,
+        (p) => p.path !== BINDER_FILE && !p.path.endsWith(".highlights.md"),
       ),
     [pages],
   );
@@ -701,10 +946,59 @@ export default function App({
     }),
     [pageList, index, selected, fileSet, filesVersion, store],
   );
-  const searchPages = useMemo(
-    () => (project ? searchablePages(project) : {}),
-    [project],
+  const searchPages = useMemo(() => {
+    if (!project) return {};
+    const found = searchablePages(project);
+    for (const entry of items) {
+      const text = entry.file ? textIndex?.[entry.file] : undefined;
+      if (!text || !entry.file) continue;
+      const pdf = isPdf(entry.file);
+      text.pages.forEach((words, at) => {
+        if (!words.trim()) return;
+        found[`${entry.path}#page=${at + 1}`] = writePage({
+          title: pdf ? `${entry.title}, p. ${at + 1}` : `${entry.title}, kept page`,
+          properties: "",
+          markdown: `${normalize(words)}\n`,
+        });
+      });
+    }
+    return found;
+  }, [project, items, textIndex]);
+
+  // The text of every PDF and kept page, for search: read in the background.
+  const readable = useMemo(() => (files ?? []).filter(isReadable), [files]);
+  const indexed = useRef<TextIndex | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void updateIndex(
+      store,
+      readable,
+      indexed.current,
+      (index) => {
+        if (cancelled) return;
+        indexed.current = index;
+        setTextIndex(index);
+      },
+      () => cancelled,
+    ).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [store, readable, filesVersion]);
+
+  const readingItem =
+    reading && project
+      ? (items.find((entry) => entry.path === reading.path) ?? null)
+      : null;
+  const marksSource =
+    readingItem && project
+      ? project.pages[highlightsPathOf(readingItem.path)]
+      : undefined;
+  const readingHighlights = useMemo(
+    () => readHighlights(marksSource).highlights,
+    [marksSource],
   );
+  const readBytes = useCallback((path: string) => store.readBytes(path), [store]);
 
   if (!project) {
     return (
@@ -773,34 +1067,107 @@ export default function App({
           : "No items with this tag.";
 
   const itemView = item && source !== null && (
-    <ItemView
-      item={item}
-      title={readPage(source).title}
-      opened={opened}
-      position={board ? null : position}
-      onPrevious={step(-1)}
-      onNext={step(1)}
-      onBack={() => open(null)}
-      backLabel={board ? "Back to the board" : `Back to ${title}`}
-      onTitle={(next) => {
-        const latestSource = fresh.current?.pages[item.path];
-        if (latestSource === undefined) return;
-        writeSource(item.path, writePage({ ...readPage(latestSource), title: next }));
+    <div className="contents" onClickCapture={(event) => followPlace(event, item.path)}>
+      <ItemView
+        item={item}
+        title={readPage(source).title}
+        opened={opened}
+        position={board ? null : position}
+        onPrevious={step(-1)}
+        onNext={step(1)}
+        onBack={() => open(null)}
+        backLabel={board ? "Back to the board" : `Back to ${title}`}
+        onTitle={(next) => {
+          const latestSource = fresh.current?.pages[item.path];
+          if (latestSource === undefined) return;
+          writeSource(item.path, writePage({ ...readPage(latestSource), title: next }));
+        }}
+        onTitleDone={() => void syncFileName()}
+        onChange={(changes) => changeItem(item.path, changes)}
+        onMarkdown={(markdown) => {
+          const latestSource = fresh.current?.pages[item.path];
+          if (latestSource === undefined) return;
+          writeSource(item.path, writePage({ ...readPage(latestSource), markdown }));
+        }}
+        onOpenFile={openFile}
+        onOpenLink={openExternal}
+        onRead={
+          item.file && isReadable(item.file) && fileSet.has(item.file)
+            ? () => readSource(item.path)
+            : undefined
+        }
+        onKeep={
+          store.fetchWeb && item.url && !item.file && /^https?:\/\//i.test(item.url)
+            ? () => void keepWebPage(item)
+            : undefined
+        }
+        keeping={keeping}
+        onDelete={() => setDeleting(item)}
+        backlinks={linkedFrom}
+        focusRef={focusEditor}
+        focusEndRef={focusEditorEnd}
+        titleRef={titleInput}
+      />
+    </div>
+  );
+
+  const reader = readingItem && readingItem.file && reading && (
+    <Reader
+      key={readingItem.file}
+      title={readingItem.title}
+      file={readingItem.file}
+      readBytes={readBytes}
+      highlights={readingHighlights}
+      onAddHighlight={(added) =>
+        changeHighlights(readingItem.path, (list) => [
+          ...list,
+          { ...added, id: newHighlightId(list.map((h) => h.id)) },
+        ])
+      }
+      onChangeHighlight={(id, category) =>
+        changeHighlights(readingItem.path, (list) =>
+          list.map((h) => (h.id === id ? { ...h, category } : h)),
+        )
+      }
+      onRemoveHighlight={(id) =>
+        changeHighlights(readingItem.path, (list) => list.filter((h) => h.id !== id))
+      }
+      quoteOf={(highlight) => quoteOf(readingItem, highlight)}
+      onAddToNotes={(highlight) => {
+        const editor = notesEditor.current;
+        if (!editor) return;
+        editor
+          .chain()
+          .insertContentAt(
+            editor.state.doc.content.size,
+            quoteOf(readingItem, highlight).html,
+          )
+          .focus("end")
+          .run();
       }}
-      onTitleDone={() => void syncFileName()}
-      onChange={(changes) => changeItem(item.path, changes)}
-      onMarkdown={(markdown) => {
-        const latestSource = fresh.current?.pages[item.path];
-        if (latestSource === undefined) return;
-        writeSource(item.path, writePage({ ...readPage(latestSource), markdown }));
-      }}
-      onOpenFile={openFile}
-      onOpenLink={openExternal}
-      onDelete={() => setDeleting(item)}
-      backlinks={linkedFrom}
-      focusRef={focusEditor}
-      focusEndRef={focusEditorEnd}
-      titleRef={titleInput}
+      target={reading.target}
+      onBack={() => setReading(null)}
+      backLabel="Back to the item"
+      notes={
+        <div
+          className="reader-notes-page"
+          onClickCapture={(event) => followPlace(event, readingItem.path)}
+        >
+          <Editor
+            key={`${readingItem.path}:${opened}`}
+            markdown={readingItem.markdown}
+            editorRef={notesEditor}
+            onChange={(change) => {
+              const latestSource = fresh.current?.pages[readingItem.path];
+              if (latestSource === undefined) return;
+              writeSource(
+                readingItem.path,
+                writePage({ ...readPage(latestSource), markdown: change.markdown }),
+              );
+            }}
+          />
+        </div>
+      }
     />
   );
 
@@ -847,106 +1214,110 @@ export default function App({
       <div className="scrim" onClick={() => setNavOpen(false)} />
 
       <main className="relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] bg-card shadow-[0_1px_2px_oklch(14.5%_0.008_326/5%),0_0_0_1px_var(--border)]">
-        <header
-          className="flex h-11 flex-none items-center gap-2 border-b px-3 text-xs"
-          onPointerDown={dragWindow}
-        >
-          <button
-            type="button"
-            className="menu-button"
-            aria-label="Show the sidebar"
-            onClick={() => setNavOpen(true)}
-          >
-            <PanelLeft className="size-4" aria-hidden />
-          </button>
-          <h1 className="truncate text-sm font-semibold">{title}</h1>
-          <span className="flex-1 truncate text-muted-foreground tabular-nums">
-            {shown.length === 1 ? "1 item" : `${shown.length} items`}
-          </span>
-          {view.kind === "inbox" && (
-            <button
-              type="button"
-              className={HEADER_BUTTON}
-              onClick={() => setZotero(true)}
+        {reader || (
+          <>
+            <header
+              className="flex h-11 flex-none items-center gap-2 border-b px-3 text-xs"
+              onPointerDown={dragWindow}
             >
-              <Library className="size-3.5" aria-hidden />
-              Add from Zotero…
-            </button>
-          )}
-          {view.kind === "reading" && (
-            <div
-              role="group"
-              aria-label="Show as"
-              className="inline-flex flex-none gap-0.5 rounded-[7px] bg-muted p-0.5"
-            >
-              {(
-                [
-                  { id: "list", label: "List", icon: List },
-                  { id: "board", label: "Board", icon: LayoutGrid },
-                ] as const
-              ).map((entry) => (
+              <button
+                type="button"
+                className="menu-button"
+                aria-label="Show the sidebar"
+                onClick={() => setNavOpen(true)}
+              >
+                <PanelLeft className="size-4" aria-hidden />
+              </button>
+              <h1 className="truncate text-sm font-semibold">{title}</h1>
+              <span className="flex-1 truncate text-muted-foreground tabular-nums">
+                {shown.length === 1 ? "1 item" : `${shown.length} items`}
+              </span>
+              {view.kind === "inbox" && (
                 <button
-                  key={entry.id}
                   type="button"
-                  aria-pressed={layout === entry.id}
-                  onClick={() => {
-                    setLayout(entry.id);
-                    saveLayout(entry.id);
-                    if (entry.id === "board") open(null);
-                  }}
-                  className={cn(
-                    "inline-flex h-6 items-center gap-1.5 rounded-[5px] px-2.5 text-xs font-medium",
-                    layout === entry.id
-                      ? "bg-card text-foreground shadow-[0_1px_2px_oklch(0_0_0/8%),0_0_0_1px_var(--border)]"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
+                  className={HEADER_BUTTON}
+                  onClick={() => setZotero(true)}
                 >
-                  <entry.icon className="size-3.5" aria-hidden />
-                  {entry.label}
+                  <Library className="size-3.5" aria-hidden />
+                  Add from Zotero…
                 </button>
-              ))}
-            </div>
-          )}
-        </header>
-
-        {finding && item && (
-          <FindBar
-            text={finding.text}
-            replacing={finding.replace}
-            onClose={() => setFinding(null)}
-          />
-        )}
-
-        {board ? (
-          itemView || (
-            <div className="min-h-0 flex-1 overflow-auto">
-              {shown.length ? (
-                <Board items={shown} onOpen={open} onStatus={setStatus} />
-              ) : (
-                <p className="p-4 text-[13px] text-muted-foreground">{emptyText}</p>
               )}
-            </div>
-          )
-        ) : (
-          <div className={cn("split", item && "has-item")}>
-            <div className="list-pane" aria-label={title}>
-              <ItemList
-                items={shown}
-                selected={selected}
-                groups={view.kind === "reading"}
-                showStatus={view.kind === "tag"}
-                empty={emptyText}
-                onOpen={open}
-              />
-            </div>
-            <div className="item-pane">
-              {itemView || (
-                <div className="grid flex-1 place-items-center p-6 text-center text-[13px] text-muted-foreground">
-                  {shown.length ? "Pick an item to see it here." : ""}
+              {view.kind === "reading" && (
+                <div
+                  role="group"
+                  aria-label="Show as"
+                  className="inline-flex flex-none gap-0.5 rounded-[7px] bg-muted p-0.5"
+                >
+                  {(
+                    [
+                      { id: "list", label: "List", icon: List },
+                      { id: "board", label: "Board", icon: LayoutGrid },
+                    ] as const
+                  ).map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      aria-pressed={layout === entry.id}
+                      onClick={() => {
+                        setLayout(entry.id);
+                        saveLayout(entry.id);
+                        if (entry.id === "board") open(null);
+                      }}
+                      className={cn(
+                        "inline-flex h-6 items-center gap-1.5 rounded-[5px] px-2.5 text-xs font-medium",
+                        layout === entry.id
+                          ? "bg-card text-foreground shadow-[0_1px_2px_oklch(0_0_0/8%),0_0_0_1px_var(--border)]"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <entry.icon className="size-3.5" aria-hidden />
+                      {entry.label}
+                    </button>
+                  ))}
                 </div>
               )}
-            </div>
-          </div>
+            </header>
+
+            {finding && item && (
+              <FindBar
+                text={finding.text}
+                replacing={finding.replace}
+                onClose={() => setFinding(null)}
+              />
+            )}
+
+            {board ? (
+              itemView || (
+                <div className="min-h-0 flex-1 overflow-auto">
+                  {shown.length ? (
+                    <Board items={shown} onOpen={open} onStatus={setStatus} />
+                  ) : (
+                    <p className="p-4 text-[13px] text-muted-foreground">{emptyText}</p>
+                  )}
+                </div>
+              )
+            ) : (
+              <div className={cn("split", item && "has-item")}>
+                <div className="list-pane" aria-label={title}>
+                  <ItemList
+                    items={shown}
+                    selected={selected}
+                    groups={view.kind === "reading"}
+                    showStatus={view.kind === "tag"}
+                    empty={emptyText}
+                    onOpen={open}
+                  />
+                </div>
+                <div className="item-pane">
+                  {itemView || (
+                    <div className="grid flex-1 place-items-center p-6 text-center text-[13px] text-muted-foreground">
+                      {shown.length ? "Pick an item to see it here." : ""}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <footer className="flex h-7 flex-none items-center gap-3.5 border-t px-3.5 text-2xs whitespace-nowrap text-muted-foreground tabular-nums">
@@ -1010,18 +1381,19 @@ export default function App({
           onClose={() => setSearching(null)}
           onOpen={(path, query) => {
             setSearching(null);
-            const found = items.find((entry) => entry.path === path);
-            if (found && !inView(found, view)) {
-              const home: View =
-                found.status === "inbox"
-                  ? { kind: "inbox" }
-                  : found.kind === "note" || found.kind === "thought"
-                    ? { kind: "notes" }
-                    : { kind: "reading" };
-              setView(home);
-              saveView(viewKey(home));
+            const inFile = /^(.*)#page=(\d+)$/.exec(path);
+            if (inFile) {
+              const page = Number(inFile[2]);
+              const found = items.find((entry) => entry.path === inFile[1]);
+              readSource(inFile[1], {
+                page: found?.file && isPdf(found.file) ? page : null,
+                highlight: null,
+                find: query,
+              });
+              return;
             }
-            if (path !== selected) open(path);
+            setReading(null);
+            showItem(path);
             requestAnimationFrame(() => openFind(query));
           }}
         />

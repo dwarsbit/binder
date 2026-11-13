@@ -297,10 +297,10 @@ export function writeBinderInfo(source: string | undefined, question: string): s
   });
 }
 
-/** Every item of a binder: every Markdown file but `binder.md`. */
+/** Every item of a binder: every Markdown file but `binder.md` and the highlights files. */
 export function itemsOf(project: Project): Item[] {
   return Object.entries(project.pages)
-    .filter(([path]) => path !== BINDER_FILE)
+    .filter(([path]) => path !== BINDER_FILE && !/\.highlights\.md$/i.test(path))
     .map(([path, source]) => readItem(path, source));
 }
 

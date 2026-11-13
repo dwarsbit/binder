@@ -30,10 +30,11 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "script-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "worker-src": "'self' blob:",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' data: blob: https:",
-        "font-src": "'self' data:",
+        "font-src": "'self' data: blob:",
         "connect-src": "'self' ipc: http://ipc.localhost https://api.zotero.org https://api.crossref.org https://openlibrary.org",
         "object-src": "'none'",
         "frame-src": "'none'",
