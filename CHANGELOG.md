@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-11-13)
 
 - Read a PDF or a web page in Binder: choose **Read** on its item. Zoom in and out, and find text in the source with Cmd/Ctrl + F.
 - Highlight text in a source as a claim, definition, method, finding or quote. The highlights are listed next to the source, and a click goes back to each one.
