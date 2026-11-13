@@ -1,0 +1,462 @@
+@import "tailwindcss";
+@import "@cursive/editor/tokens.css";
+@import "@cursive/editor/editor.css";
+
+/* ---------- Binder's color: petrol teal, where Cursive has rust ---------- */
+:root {
+  --primary: oklch(43.2% 0.069 205);
+  --primary-fill: oklch(43.2% 0.069 205);
+  --primary-edge: oklch(36.5% 0.058 205);
+  --ring: oklch(43.2% 0.069 205);
+  --selection: oklch(93% 0.03 205);
+  --tint: oklch(43.2% 0.069 205);
+  --tint-foreground: oklch(36.5% 0.058 205);
+  --tint-soft: oklch(43.2% 0.069 205 / 8%);
+  --tint-edge: oklch(43.2% 0.069 205 / 25%);
+  --syn-kw: oklch(43.2% 0.069 205);
+  /* The statuses, as the reading list's board shows them. */
+  --status-to-read: oklch(58.8% 0.158 241.966);
+  --status-reading: oklch(66.6% 0.179 58.318);
+  --status-processed: oklch(59.6% 0.145 163.225);
+  --status-set-aside: oklch(70.7% 0.022 323);
+  --status-inbox: var(--tint);
+}
+.dark {
+  --primary: oklch(77% 0.075 200);
+  --primary-fill: oklch(77% 0.075 200);
+  --primary-edge: oklch(77% 0.075 200);
+  --ring: oklch(77% 0.075 200);
+  --selection: oklch(77% 0.075 200 / 35%);
+  --tint: oklch(77% 0.075 200);
+  --tint-foreground: oklch(85% 0.06 200);
+  --tint-soft: oklch(77% 0.075 200 / 15%);
+  --tint-edge: oklch(77% 0.075 200 / 35%);
+  --syn-kw: oklch(85% 0.06 200);
+  --status-to-read: oklch(74.6% 0.16 232.661);
+  --status-reading: oklch(82.8% 0.189 84.429);
+  --status-processed: oklch(76.5% 0.177 163.223);
+  --status-set-aside: oklch(55% 0.02 323);
+}
+
+/* ---------- Shell: the sidebar on the backdrop, the page as a card ---------- */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-width, 248px) minmax(0, 1fr);
+  gap: 8px;
+  height: 100%;
+  padding: 8px;
+}
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: 12px;
+}
+/* The sidebar's edge: the gap between it and the page, dragged to resize. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -8px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+}
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 8px 3px;
+  border-radius: 1px;
+  transition: background 120ms;
+}
+.sidebar-resizer:hover::after,
+.pointer-dragging .sidebar-resizer::after {
+  background: var(--border);
+}
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding-right: 6px;
+  border-radius: 6px;
+  color: var(--accent-foreground);
+  cursor: pointer;
+  user-select: none;
+}
+.row:hover,
+.row:focus-within {
+  background: var(--accent);
+}
+.row-active,
+.row-active:hover {
+  background: var(--tint-soft);
+  color: var(--tint-foreground);
+  font-weight: 500;
+}
+.row-main {
+  align-self: stretch;
+}
+/* Where a dragged row lands. */
+.row-drop-before {
+  box-shadow: inset 0 2px 0 var(--tint);
+}
+.row-drop-after {
+  box-shadow: inset 0 -2px 0 var(--tint);
+}
+.row-drop-into {
+  box-shadow: inset 0 0 0 1px var(--tint);
+}
+/* Rows don't light up under a drag passing over them. */
+.pointer-dragging .row:hover {
+  background: none;
+}
+.pointer-dragging .row .row-action {
+  display: none;
+}
+.pointer-dragging .row .row-count {
+  display: inline;
+}
+.pointer-dragging .row-active:hover {
+  background: var(--tint-soft);
+}
+.row .row-action {
+  display: none;
+}
+.row:hover .row-action,
+.row:focus-within .row-action {
+  display: grid;
+}
+.row:hover .row-count,
+.row:focus-within .row-count {
+  display: none;
+}
+.row-count {
+  padding: 0 4px;
+}
+/* The macOS window has no title bar: its window buttons sit over the
+   top left corner, where the sidebar's head and, in a narrow window,
+   the page's header leave room for them. */
+.window-buttons .sidebar-head {
+  padding-left: 76px;
+}
+.window-buttons .sidebar-head .mark {
+  display: none;
+}
+.menu-button {
+  display: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.menu-button:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.scrim {
+  display: none;
+}
+
+/* ---------- Lists of items, and an item next to them ---------- */
+.split {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+.split > .list-pane {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  border-right: 1px solid var(--border);
+}
+.split > .item-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.back-button {
+  display: none;
+}
+.item-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  color: var(--accent-foreground);
+}
+.item-row:hover {
+  background: var(--accent);
+}
+.item-row[aria-current="true"],
+.item-row[aria-current="true"]:hover {
+  background: var(--tint-soft);
+}
+.item-row[aria-current="true"] .item-title {
+  color: var(--tint-foreground);
+}
+.item-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.item-meta {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+}
+.status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--status-inbox);
+}
+.status-to-read {
+  --status: var(--status-to-read);
+}
+.status-reading {
+  --status: var(--status-reading);
+}
+.status-processed {
+  --status: var(--status-processed);
+}
+.status-set-aside {
+  --status: var(--status-set-aside);
+}
+.status-inbox {
+  --status: var(--status-inbox);
+}
+.status-dot[class*="status-"] {
+  background: var(--status);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--secondary-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+button.chip:hover {
+  background: var(--tint-soft);
+  color: var(--tint-foreground);
+}
+
+/* ---------- The reading list as a board ---------- */
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 100%;
+  padding: 16px;
+  overflow-x: auto;
+}
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--sidebar);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.board-column[data-over="true"] {
+  box-shadow: 0 0 0 2px var(--tint);
+}
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow:
+    0 1px 2px oklch(14.5% 0.008 326 / 5%),
+    0 0 0 1px var(--border);
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+.board-card:hover {
+  box-shadow:
+    0 1px 3px oklch(14.5% 0.008 326 / 10%),
+    0 0 0 1px var(--tint-edge);
+}
+.board-card[data-dragging="true"] {
+  opacity: 0.4;
+}
+
+/* ---------- An item: its properties over its notes ---------- */
+/* A title wraps: works have long ones. */
+textarea.page-title {
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+}
+.item-props {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.item-props > dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.item-props > dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 28px;
+  margin: 0;
+  min-width: 0;
+}
+.prop-input {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  margin-left: -6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  outline: none;
+}
+select.prop-input {
+  width: auto;
+  max-width: 100%;
+  padding-right: 2px;
+}
+.prop-input:hover {
+  background: var(--accent);
+}
+.prop-input:focus {
+  border-color: var(--ring);
+  background: var(--background);
+}
+.prop-input::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.5;
+}
+/* The find bar sits under the item's own bar. */
+.app .find-bar {
+  top: 92px;
+}
+/* Dialogs with more in them than a question. */
+.confirm:has(.dialog-wide) {
+  width: min(32rem, calc(100vw - 2rem));
+}
+.confirm:has(.dialog-wider) {
+  width: min(42rem, calc(100vw - 2rem));
+}
+.accept-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--sidebar);
+  font-size: 12px;
+}
+.drop-cover {
+  position: fixed;
+  inset: 8px;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--tint);
+  border-radius: 12px;
+  background: oklch(from var(--card) l c h / 85%);
+  color: var(--tint-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* A narrow window: the sidebar slides in over the page. */
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar-resizer {
+    display: none;
+  }
+  .sidebar {
+    position: fixed;
+    z-index: 40;
+    inset: 0 auto 0 0;
+    width: 272px;
+    padding: 8px;
+    background: var(--sidebar);
+    box-shadow: var(--pop-shadow);
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+  }
+  .nav-open .sidebar {
+    transform: none;
+  }
+  .nav-open .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: oklch(0 0 0 / 25%);
+  }
+  .menu-button {
+    display: grid;
+  }
+  .window-buttons .app > main > header {
+    padding-left: 84px;
+  }
+  .crumb-folder,
+  footer .path {
+    display: none;
+  }
+  .row .row-action {
+    display: grid;
+  }
+  .row .row-count {
+    display: none;
+  }
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .split > .list-pane {
+    border-right: 0;
+  }
+  .split.has-item > .list-pane,
+  .split:not(.has-item) > .item-pane {
+    display: none;
+  }
+  .back-button {
+    display: inline-flex;
+  }
+  .item-props {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
