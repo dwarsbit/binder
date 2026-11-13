@@ -9,8 +9,6 @@
 - Search finds text inside every PDF and kept page, by page, and opens the source at the match.
 - Highlights are kept in a Markdown file next to their item, and go along when the item gets a new name. See [the binder format](docs/format.md).
 
-## 0.1.0 (unreleased)
-
 - Make a binder for a research project and write down your research question. A binder is a folder in the Binder folder in your home folder; open any other folder as a binder too.
 - Add a link, a DOI, an ISBN or a thought with Cmd/Ctrl + N. A DOI is looked up at Crossref and an ISBN at Open Library, for the title, authors, year and journal.
 - Add a file from Add to binder, or drop files on the window. Each file is copied into the binder, next to its item and under the same name.
