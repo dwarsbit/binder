@@ -1,6 +1,7 @@
 import type { Project } from "@cursive/editor/lib/paths";
 import { newItemSource, writeBinderInfo, type NewItem } from "./binder";
-import { writeHighlights } from "./highlights";
+import { highlightLine, placeHref, writeHighlights } from "./highlights";
+import { writeAssistant } from "./assistant/file";
 import { SAMPLE_FILES } from "./sample-files";
 
 /**
@@ -152,6 +153,59 @@ const ITEMS: Array<NewItem & { path: string; added: string }> = [
   },
 ];
 
+const SURVEY = "items/Where students read library survey 2025.md";
+/** A link from the survey's item to the words of a passage in its kept page. */
+const inSurvey = (text: string) =>
+  `[passage](${placeHref("items", {
+    file: "items/Where students read library survey 2025.html",
+    page: null,
+    highlight: null,
+    text,
+  })})`;
+
+/** What a model on the student's computer wrote about the library survey. */
+const SURVEY_NOTE = writeAssistant(SURVEY, {
+  model: "llama3.2",
+  provider: "this computer",
+  written: "2026-11-12",
+  proposal: { tags: ["printing", "first year"] },
+  parts: [
+    {
+      id: "summary",
+      heading: "Summary",
+      markdown: [
+        `The library asked students where and how they study; 842 answered, 312 of them in their first year. ${inSurvey("This year 842 students answered, 312 of them in their first year")}`,
+        `Most first-year students read for their courses at home. ${inSurvey("Two thirds of first-year students do most of their course reading at home")}`,
+        `Most read on a laptop, and about a quarter print their texts. ${inSurvey("58% read course texts mostly on a laptop")} ${inSurvey("27% mostly print them")}`,
+        `Cost keeps students from printing more. ${inSurvey("most students named cost")}`,
+      ].join(" "),
+    },
+    {
+      id: "read-closely",
+      heading: "Read closely",
+      markdown: `- The students who would read on paper if the texts came as a printed reader: close to your question about screen and paper. ${inSurvey("A smaller group said they would read on paper if the texts came as a printed reader")}`,
+    },
+    {
+      id: "highlights",
+      heading: "Proposed highlights",
+      markdown: [
+        highlightLine({
+          id: "s4m1pa",
+          category: "finding",
+          page: null,
+          text: "Students who read in the library more often print their texts",
+        }),
+        highlightLine({
+          id: "q8t2vb",
+          category: "quote",
+          page: null,
+          text: "I read better on paper, but I only print what I have to hand in.",
+        }),
+      ].join("\n"),
+    },
+  ],
+});
+
 export const SAMPLE_BINDER: Project = {
   name: "Thesis",
   folders: ["items"],
@@ -163,6 +217,7 @@ export const SAMPLE_BINDER: Project = {
     ...Object.fromEntries(
       ITEMS.map(({ path, added, ...item }) => [path, newItemSource(item, added)]),
     ),
+    "items/Where students read library survey 2025.assistant.md": SURVEY_NOTE,
     "items/Screen or paper how first-year students read course texts.highlights.md":
       writeHighlights(
         "items/Screen or paper how first-year students read course texts.md",

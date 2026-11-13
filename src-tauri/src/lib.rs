@@ -1,3 +1,4 @@
+mod assistant;
 mod history;
 mod links;
 mod project;
@@ -11,6 +12,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .manage(assistant::Requests::default())
         .invoke_handler(tauri::generate_handler![
             project::project_load,
             project::project_write_page,
@@ -36,6 +38,12 @@ pub fn run() {
             links::open_in_browser,
             web::web_fetch,
             web::web_download,
+            assistant::assistant_key_exists,
+            assistant::assistant_key_set,
+            assistant::assistant_key_delete,
+            assistant::assistant_models,
+            assistant::assistant_complete,
+            assistant::assistant_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Binder");

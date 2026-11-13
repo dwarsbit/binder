@@ -28,6 +28,7 @@ import {
   zoteroAppAnswers,
   type ZoteroSource,
 } from "@cursive/editor/references/zotero";
+import { AssistantSettings } from "./AssistantSettings";
 import {
   BUTTON,
   Dialog,
@@ -648,12 +649,22 @@ function BibFiles() {
   );
 }
 
-/** The app's settings. Today: where works come from. */
-export function SettingsDialog({ onClose }: { onClose: () => void }) {
+/** The app's settings: the assistant, and where works come from. */
+export function SettingsDialog({
+  onClose,
+  assistantOn,
+  onAssistantOn,
+}: {
+  onClose: () => void;
+  /** Whether this binder lets the assistant in. */
+  assistantOn: boolean;
+  onAssistantOn: (on: boolean) => void;
+}) {
   return (
     <Dialog title="Settings" onClose={onClose}>
       <div className="settings mt-3">
-        <h2 className="mb-2 text-xs font-medium text-muted-foreground">Sources</h2>
+        <AssistantSettings binderOn={assistantOn} onBinderOn={onAssistantOn} />
+        <h2 className="mt-5 mb-2 text-xs font-medium text-muted-foreground">Sources</h2>
         <ZoteroSources />
         <BibFiles />
         <p className="mt-4 text-xs text-muted-foreground">

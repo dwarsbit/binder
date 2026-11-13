@@ -1,3 +1,4 @@
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@cursive/editor/lib/cn";
 import { startPointerDrag } from "@cursive/editor/lib/pointer-drag";
@@ -16,11 +17,17 @@ function Row({
   item,
   selected,
   showStatus,
+  proposal,
+  reading,
   onOpen,
 }: {
   item: Item;
   selected: boolean;
   showStatus: boolean;
+  /** The assistant has a proposal for the item. */
+  proposal: boolean;
+  /** The assistant is reading the item. */
+  reading: boolean;
   onOpen: (path: string) => void;
 }) {
   return (
@@ -39,6 +46,21 @@ function Row({
         <span className="item-title line-clamp-2">{item.title}</span>
         <span className="item-meta truncate">{itemByline(item)}</span>
       </span>
+      {(proposal || reading) && (
+        <Sparkles
+          className={cn(
+            "mt-1 size-3.5 flex-none text-tint",
+            reading && "animate-pulse",
+          )}
+          aria-label={
+            reading ? "The assistant is reading it" : "The assistant has a proposal"
+          }
+        >
+          <title>
+            {reading ? "The assistant is reading it" : "The assistant has a proposal"}
+          </title>
+        </Sparkles>
+      )}
       {showStatus && item.status && (
         <span
           className={cn("status-dot mt-1.5", `status-${item.status}`)}
@@ -60,6 +82,8 @@ export function ItemList({
   showStatus = false,
   empty,
   onOpen,
+  proposals,
+  reading = null,
 }: {
   items: Item[];
   selected: string | null;
@@ -67,6 +91,10 @@ export function ItemList({
   showStatus?: boolean;
   empty: React.ReactNode;
   onOpen: (path: string) => void;
+  /** Items the assistant has a proposal for. */
+  proposals?: Set<string>;
+  /** The item the assistant is reading. */
+  reading?: string | null;
 }) {
   if (items.length === 0) {
     return <div className="px-2.5 py-2 text-[13px] text-muted-foreground">{empty}</div>;
@@ -80,6 +108,8 @@ export function ItemList({
             item={item}
             selected={item.path === selected}
             showStatus={showStatus}
+            proposal={proposals?.has(item.path) ?? false}
+            reading={item.path === reading}
             onOpen={onOpen}
           />
         ))}
@@ -110,6 +140,8 @@ export function ItemList({
                 item={item}
                 selected={item.path === selected}
                 showStatus={false}
+                proposal={proposals?.has(item.path) ?? false}
+                reading={item.path === reading}
                 onOpen={onOpen}
               />
             ))}

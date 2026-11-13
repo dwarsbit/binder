@@ -48,10 +48,17 @@ export function readHighlights(source: string | undefined): {
   highlights: Highlight[];
   other: string[];
 } {
+  if (!source) return { highlights: [], other: [] };
+  return readHighlightLines(readPage(source).markdown);
+}
+
+/** The highlight lines of a list in Markdown, and its other lines. */
+export function readHighlightLines(markdown: string): {
+  highlights: Highlight[];
+  other: string[];
+} {
   const highlights: Highlight[] = [];
   const other: string[] = [];
-  if (!source) return { highlights, other };
-  const { markdown } = readPage(source);
   for (const line of markdown.split("\n")) {
     const found = LINE.exec(line);
     const category = found?.[1].toLowerCase() as Category | undefined;
@@ -69,6 +76,10 @@ export function readHighlights(source: string | undefined): {
   return { highlights, other };
 }
 
+/** A highlight as a line of its file. */
+export const highlightLine = (h: Highlight) =>
+  `- **${categoryLabel(h.category)}**${h.page ? ` · p. ${h.page}` : ""} · “${oneLine(h.text)}” ^${h.id}`;
+
 /** The highlights file for an item, keeping the lines Binder doesn't read. */
 export function writeHighlights(
   itemPath: string,
@@ -80,10 +91,7 @@ export function writeHighlights(
     (p) => p.kind === "raw" || p.key !== "highlights-of",
   );
   const other = readHighlights(previous).other;
-  const lines = highlights.map(
-    (h) =>
-      `- **${categoryLabel(h.category)}**${h.page ? ` · p. ${h.page}` : ""} · “${oneLine(h.text)}” ^${h.id}`,
-  );
+  const lines = highlights.map(highlightLine);
   const body = [...lines, ...other];
   return writePage({
     title: "",
@@ -109,16 +117,26 @@ export interface Place {
   file: string;
   page: number | null;
   highlight: string | null;
+  /** The words of a passage, from a link the assistant wrote. */
+  text?: string | null;
 }
+
+/** `text=` in a link: spaces as %20, as other apps read them. */
+const encodeText = (text: string) => encodeURIComponent(text).replace(/'/g, "%27");
+
+/** A path in a Markdown link: parentheses escaped, so a name like "Notes (draft)" keeps the link whole. */
+const linkPath = (href: string) => href.replace(/\(/g, "%28").replace(/\)/g, "%29");
 
 /** A link from a page in `fromDir` to a place in a source file. */
 export function placeHref(fromDir: string, place: Place): string {
   const params = [
     place.page ? `page=${place.page}` : "",
     place.highlight ? `highlight=${place.highlight}` : "",
+    place.text ? `text=${encodeText(place.text)}` : "",
   ].filter(Boolean);
   return (
-    relativeHref(fromDir, place.file) + (params.length ? `#${params.join("&")}` : "")
+    linkPath(relativeHref(fromDir, place.file)) +
+    (params.length ? `#${params.join("&")}` : "")
   );
 }
 
@@ -155,6 +173,7 @@ export function placeOfHref(fromDir: string, href: string): Place | null {
     file,
     page: Number.isInteger(page) && page > 0 ? page : null,
     highlight: params.get("highlight"),
+    text: params.get("text"),
   };
 }
 
@@ -169,9 +188,11 @@ export function retargetFileLinks(
 ): Array<[path: string, source: string]> {
   const writes: Array<[string, string]> = [];
   for (const [path, source] of Object.entries(pages)) {
+    const name = baseName(from);
     if (
-      !source.includes(encodeURIComponent(baseName(from))) &&
-      !source.includes(baseName(from))
+      !source.includes(encodeURIComponent(name)) &&
+      !source.includes(linkPath(encodeURIComponent(name))) &&
+      !source.includes(name)
     )
       continue;
     const dir = parentOf(path);
@@ -179,7 +200,7 @@ export function retargetFileLinks(
       const hash = href.indexOf("#");
       const target = resolveHref(dir, hash < 0 ? href : href.slice(0, hash));
       if (target !== from) return whole;
-      return `](${relativeHref(dir, to)}${hash < 0 ? "" : href.slice(hash)})`;
+      return `](${linkPath(relativeHref(dir, to))}${hash < 0 ? "" : href.slice(hash)})`;
     });
     if (next !== source) writes.push([path, next]);
   }
