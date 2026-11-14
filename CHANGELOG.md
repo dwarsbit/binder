@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-11-14)
 
 - Let an assistant read your sources, on your own provider (Mistral, OpenAI, Anthropic or any service with the OpenAI chat API) or a model on your computer (Ollama, LM Studio). Set it up in Settings, which names where the text goes. Your key is kept in your system's credential store.
 - The assistant proposes the kind, title, authors, year and tags of each new source. Change what you like and accept it, or dismiss it. Items with a proposal have a mark in the inbox.

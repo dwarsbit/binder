@@ -1,6 +1,6 @@
 [package]
 name = "binder"
-version = "0.2.0"
+version = "0.3.0"
 description = "Binder - collect, explore and understand the material of a research project"
 authors = ["Leon"]
 edition = "2021"
